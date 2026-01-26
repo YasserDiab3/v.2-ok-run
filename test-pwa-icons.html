@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار أيقونات PWA</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            direction: rtl;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 2px solid #ffeaa7;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .section h2 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .icon-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .icon-item img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .icon-item .size {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        .icon-item .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .status-badge.ok {
+            background: #28a745;
+            color: white;
+        }
+        .status-badge.fail {
+            background: #dc3545;
+            color: white;
+        }
+        .manifest-info {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            border-left: 4px solid #667eea;
+        }
+        .manifest-info pre {
+            background: #f1f3f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 0.9em;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            display: block;
+            margin: 20px auto;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        .test-results {
+            margin-top: 20px;
+        }
+        .test-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background: white;
+        }
+        .test-item.pass {
+            border-right: 4px solid #28a745;
+        }
+        .test-item.fail {
+            border-right: 4px solid #dc3545;
+        }
+        .test-item .test-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .test-item .test-message {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 اختبار أيقونات PWA</h1>
+        
+        <div id="mainStatus" class="status loading">
+            ⏳ جاري فحص الـ manifest والأيقونات...
+        </div>
+
+        <div class="section">
+            <h2>📋 معلومات Manifest</h2>
+            <div id="manifestInfo" class="manifest-info">
+                <p>جاري تحميل manifest.json...</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🖼️ الأيقونات المتاحة</h2>
+            <div id="iconGrid" class="icon-grid">
+                <p>جاري فحص الأيقونات...</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>✅ نتائج الفحص</h2>
+            <div id="testResults" class="test-results">
+                <p>جاري تشغيل الاختبارات...</p>
+            </div>
+        </div>
+
+        <button onclick="runTests()">🔄 إعادة الفحص</button>
+    </div>
+
+    <script>
+        let manifestData = null;
+        let iconTests = {};
+
+        async function loadManifest() {
+            try {
+                const response = await fetch('/Frontend/manifest.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                manifestData = await response.json();
+                return manifestData;
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        async function testIcon(iconSrc) {
+            try {
+                const response = await fetch(iconSrc, { method: 'HEAD' });
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        async function runTests() {
+            const mainStatus = document.getElementById('mainStatus');
+            const manifestInfo = document.getElementById('manifestInfo');
+            const iconGrid = document.getElementById('iconGrid');
+            const testResults = document.getElementById('testResults');
+
+            // Reset
+            mainStatus.className = 'status loading';
+            mainStatus.textContent = '⏳ جاري فحص الـ manifest والأيقونات...';
+            iconGrid.innerHTML = '<p>جاري فحص الأيقونات...</p>';
+            testResults.innerHTML = '<p>جاري تشغيل الاختبارات...</p>';
+
+            const tests = [];
+            let allPassed = true;
+
+            // Test 1: Load Manifest
+            try {
+                const manifest = await loadManifest();
+                tests.push({
+                    name: 'تحميل Manifest',
+                    pass: true,
+                    message: `تم تحميل manifest.json بنجاح (${manifest.name})`
+                });
+
+                // Display manifest info
+                manifestInfo.innerHTML = `
+                    <p><strong>الاسم:</strong> ${manifest.name}</p>
+                    <p><strong>الاسم المختصر:</strong> ${manifest.short_name}</p>
+                    <p><strong>Start URL:</strong> ${manifest.start_url}</p>
+                    <p><strong>عدد الأيقونات:</strong> ${manifest.icons ? manifest.icons.length : 0}</p>
+                    <p><strong>اللون الرئيسي:</strong> <span style="display: inline-block; width: 20px; height: 20px; background: ${manifest.theme_color}; border-radius: 3px; vertical-align: middle;"></span> ${manifest.theme_color}</p>
+                `;
+
+                // Test 2: Check if icons array exists
+                if (!manifest.icons || manifest.icons.length === 0) {
+                    tests.push({
+                        name: 'وجود الأيقونات في Manifest',
+                        pass: false,
+                        message: 'لا توجد أيقونات في manifest.json!'
+                    });
+                    allPassed = false;
+                } else {
+                    tests.push({
+                        name: 'وجود الأيقونات في Manifest',
+                        pass: true,
+                        message: `تم العثور على ${manifest.icons.length} أيقونة`
+                    });
+
+                    // Test 3: Check for required icon sizes
+                    const requiredSizes = ['192x192', '512x512'];
+                    const foundSizes = manifest.icons.map(icon => icon.sizes);
+                    
+                    requiredSizes.forEach(size => {
+                        const found = foundSizes.includes(size);
+                        tests.push({
+                            name: `الأيقونة المطلوبة ${size}`,
+                            pass: found,
+                            message: found ? `✅ موجودة` : `❌ مفقودة`
+                        });
+                        if (!found) allPassed = false;
+                    });
+
+                    // Test 4: Check icon paths (absolute vs relative)
+                    const hasRelativePaths = manifest.icons.some(icon => 
+                        icon.src && !icon.src.startsWith('/') && !icon.src.startsWith('http') && !icon.src.startsWith('data:')
+                    );
+                    tests.push({
+                        name: 'فحص مسارات الأيقونات',
+                        pass: !hasRelativePaths,
+                        message: hasRelativePaths ? '⚠️ بعض المسارات نسبية (يجب أن تكون مطلقة)' : '✅ جميع المسارات مطلقة'
+                    });
+                    if (hasRelativePaths) allPassed = false;
+
+                    // Test 5: Check if icon files actually exist
+                    iconGrid.innerHTML = '';
+                    for (const icon of manifest.icons) {
+                        const iconExists = await testIcon(icon.src);
+                        iconTests[icon.sizes] = iconExists;
+
+                        const iconDiv = document.createElement('div');
+                        iconDiv.className = 'icon-item';
+                        iconDiv.innerHTML = `
+                            ${iconExists ? `<img src="${icon.src}" alt="${icon.sizes}">` : '<div style="height: 64px; background: #ddd; border-radius: 5px;"></div>'}
+                            <div class="size">${icon.sizes}</div>
+                            <div class="status-badge ${iconExists ? 'ok' : 'fail'}">${iconExists ? '✅ موجود' : '❌ مفقود'}</div>
+                            <div style="font-size: 0.8em; color: #6c757d; margin-top: 5px; word-break: break-all;">${icon.src}</div>
+                        `;
+                        iconGrid.appendChild(iconDiv);
+
+                        if (!iconExists) allPassed = false;
+                    }
+
+                    const allIconsExist = Object.values(iconTests).every(exists => exists);
+                    tests.push({
+                        name: 'توفر ملفات الأيقونات',
+                        pass: allIconsExist,
+                        message: allIconsExist ? '✅ جميع الأيقونات متوفرة' : '❌ بعض الأيقونات مفقودة'
+                    });
+                }
+
+                // Test 6: Check for purpose attribute
+                const hasMaskableIcons = manifest.icons.some(icon => 
+                    icon.purpose && icon.purpose.includes('maskable')
+                );
+                tests.push({
+                    name: 'دعم Maskable Icons',
+                    pass: hasMaskableIcons,
+                    message: hasMaskableIcons ? '✅ يوجد أيقونات maskable' : '⚠️ لا يوجد أيقونات maskable (اختياري)'
+                });
+
+            } catch (error) {
+                tests.push({
+                    name: 'تحميل Manifest',
+                    pass: false,
+                    message: `فشل تحميل manifest.json: ${error.message}`
+                });
+                allPassed = false;
+                manifestInfo.innerHTML = `<p style="color: #dc3545;"><strong>خطأ:</strong> ${error.message}</p>`;
+            }
+
+            // Display test results
+            testResults.innerHTML = tests.map(test => `
+                <div class="test-item ${test.pass ? 'pass' : 'fail'}">
+                    <div class="test-name">${test.pass ? '✅' : '❌'} ${test.name}</div>
+                    <div class="test-message">${test.message}</div>
+                </div>
+            `).join('');
+
+            // Update main status
+            if (allPassed) {
+                mainStatus.className = 'status success';
+                mainStatus.textContent = '✅ جميع الاختبارات نجحت! الـ PWA جاهز للتثبيت';
+            } else {
+                mainStatus.className = 'status error';
+                mainStatus.textContent = '❌ فشل بعض الاختبارات. يرجى التحقق من النتائج أدناه';
+            }
+        }
+
+        // Run tests on page load
+        window.addEventListener('DOMContentLoaded', runTests);
+    </script>
+</body>
+</html>
