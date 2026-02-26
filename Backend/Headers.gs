@@ -10,7 +10,7 @@
 function getDefaultHeaders(sheetName) {
     const headersMap = {
         'Users': ['id', 'name', 'email', 'password', 'passwordHash', 'role', 'department', 'active', 'photo', 'permissions', 'lastLogin', 'lastLogout', 'isOnline', 'loginHistory', 'createdAt', 'updatedAt'],
-        'Incidents': ['id', 'isoCode', 'title', 'description', 'location', 'siteId', 'siteName', 'sublocation', 'sublocationId', 'sublocationName', 'date', 'severity', 'incidentType', 'affiliation', 'department', 'reportedBy', 'employeeCode', 'employeeNumber', 'employeeName', 'employeeJob', 'employeeDepartment', 'status', 'rootCause', 'correctiveAction', 'preventiveAction', 'actionPlan', 'affectedType', 'affectedCode', 'affectedName', 'affectedJobTitle', 'affectedDepartment', 'affectedContact', 'injuryDescription', 'losses', 'actionsTaken', 'contractorName', 'image', 'attachments', 'investigation', 'closureDate', 'actionOwner', 'createdBy', 'createdAt', 'updatedAt'],
+        'Incidents': ['id', 'isoCode', 'title', 'description', 'location', 'siteId', 'siteName', 'sublocation', 'sublocationId', 'sublocationName', 'date', 'severity', 'incidentType', 'affiliation', 'department', 'reportedBy', 'employeeCode', 'employeeNumber', 'employeeName', 'employeeJob', 'employeeDepartment', 'status', 'rootCause', 'correctiveAction', 'preventiveAction', 'actionPlan', 'affectedType', 'affectedCode', 'affectedName', 'affectedJobTitle', 'affectedDepartment', 'affectedContact', 'injuryDescription', 'losses', 'actionsTaken', 'contractorName', 'image', 'attachments', 'investigation', 'closureDate', 'actionOwner', 'requiresApproval', 'approvedBy', 'approvedAt', 'rejectedBy', 'rejectedAt', 'rejectionReason', 'createdBy', 'createdAt', 'updatedAt'],
         'IncidentNotifications': ['id', 'notificationNumber', 'date', 'location', 'siteId', 'siteName', 'sublocation', 'sublocationId', 'sublocationName', 'department', 'incidentType', 'affiliation', 'contractorName', 'employeeCode', 'employeeName', 'employeeJob', 'employeeDepartment', 'description', 'injuryDescription', 'losses', 'actions', 'reporterName', 'reporterCode', 'createdBy', 'createdAt', 'updatedAt'],
         'SafetyAlerts': ['id', 'alertNumber', 'sequentialNumber', 'incidentId', 'incidentType', 'incidentDate', 'incidentLocation', 'who', 'description', 'facts', 'causes', 'lessonsLearned', 'preventiveMeasures', 'locationImage', 'causesImage', 'notificationNumber', 'preparedBy', 'approvedBy', 'approvedAt', 'issueDate', 'status', 'createdBy', 'createdAt', 'updatedAt'],
         'Incident_Analysis_Settings': ['id', 'enabledSections', 'updatedAt', 'updatedBy', 'createdAt'],
@@ -18,8 +18,17 @@ function getDefaultHeaders(sheetName) {
         'IncidentsRegistry': ['id', 'sequentialNumber', 'incidentId', 'incidentType', 'factory', 'incidentLocation', 'incidentDate', 'incidentDay', 'incidentTime', 'shift', 'employeeAffiliation', 'employeeCode', 'employeeName', 'employeeJob', 'employeeDepartment', 'incidentDetails', 'incidentDetailsBrief', 'injuryDescription', 'injuredPart', 'losses', 'equipmentCause', 'actionsTaken', 'leaveStartDate', 'returnToWorkDate', 'totalLeaveDays', 'treatingDoctor', 'status', 'createdAt', 'updatedAt'],
         'NearMiss': ['id', 'type', 'date', 'observerName', 'phone', 'location', 'department', 'description', 'correctiveProposed', 'correctiveDescription', 'attachments', 'status', 'reportedBy', 'createdAt', 'updatedAt'],
         'PTW': ['id', 'workType', 'workDescription', 'location', 'department', 'startDate', 'endDate', 'responsible', 'status', 'approvals', 'requiredPPE', 'riskAssessment', 'riskNotes', 'createdAt', 'updatedAt'],
-        // ✅ سجل حصر التصاريح (الإدخال اليدوي) - PTW Registry
-        'PTWRegistry': ['id', 'sequentialNumber', 'permitId', 'openDate', 'permitType', 'permitTypeDisplay', 'requestingParty', 'locationId', 'location', 'sublocationId', 'sublocation', 'timeFrom', 'timeTo', 'totalTime', 'authorizedParty', 'workDescription', 'supervisor1', 'supervisor2', 'status', 'closureDate', 'closureReason', 'createdAt', 'updatedAt'],
+        // ✅ سجل حصر التصاريح (الإدخال اليدوي) - PTW Registry (جميع القيم تخزن كنص أو رقم فقط، لا JSON)
+        'PTWRegistry': [
+            'id', 'sequentialNumber', 'permitId', 'openDate', 'permitType', 'permitTypeDisplay', 'requestingParty', 'locationId', 'location', 'sublocationId', 'sublocation',
+            'timeFrom', 'timeTo', 'totalTime', 'authorizedParty', 'workDescription', 'supervisor1', 'supervisor2', 'status',
+            'paperPermitNumber', 'equipment', 'tools', 'toolsList', 'teamMembersText',
+            'hotWorkDetails', 'hotWorkOther', 'confinedSpaceDetails', 'confinedSpaceOther', 'heightWorkDetails', 'heightWorkOther',
+            'electricalWorkType', 'coldWorkType', 'otherWorkType', 'excavationLength', 'excavationWidth', 'excavationDepth', 'soilType',
+            'preStartChecklist', 'lotoApplied', 'governmentPermits', 'riskAssessmentAttached', 'gasTesting', 'mocRequest',
+            'ppeNotes', 'requiredPPE', 'riskLikelihood', 'riskConsequence', 'riskScore', 'riskLevel', 'riskNotes',
+            'manualApprovalsText', 'manualClosureApprovalsText', 'closureDate', 'closureReason', 'isManualEntry', 'createdAt', 'updatedAt'
+        ],
         'PTW_MAP_COORDINATES': ['id', 'name', 'latitude', 'longitude', 'zoom', 'createdAt', 'updatedAt', 'createdBy', 'updatedBy'],
         'PTW_DEFAULT_COORDINATES': ['latitude', 'longitude', 'zoom', 'updatedAt', 'updatedBy'],
         'Training': ['id', 'name', 'trainer', 'trainingType', 'date', 'factory', 'factoryName', 'location', 'locationName', 'startTime', 'endTime', 'hours', 'startDate', 'participants', 'participantsCount', 'status', 'createdAt', 'updatedAt'],

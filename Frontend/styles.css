@@ -4970,6 +4970,24 @@ body.app-active {
     transform: none;
 }
 
+/* تأكد من أن الزر قابل للنقر - مع z-index عالي جداً */
+.notifications-btn,
+#notifications-btn {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    z-index: 1002 !important;
+    position: relative !important;
+}
+
+/* التأكد من أن الأزرار داخل sidebar قابلة للنقر */
+.sidebar .notifications-btn,
+.sidebar #notifications-btn,
+.sidebar button {
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 1002;
+}
+
 .notifications-badge {
     position: absolute;
     top: 8px;
@@ -5365,27 +5383,35 @@ body.app-active {
 
 /* Sidebar notifications dropdown positioning */
 #notifications-dropdown {
-    right: 0;
-    left: auto;
-    top: calc(100% + 10px);
-    position: absolute;
-    z-index: 10000;
+    /* استخدام position: fixed للتغلب على overflow: hidden في sidebar */
+    position: fixed !important;
+    z-index: 10001 !important;
     direction: rtl;
     text-align: right;
     visibility: visible;
     opacity: 1;
+    /* الموقع سيتم تحديده عبر JavaScript */
 }
 
 /* Ensure parent container has relative positioning */
 #notifications-btn {
     position: relative;
+    cursor: pointer;
+    z-index: 100;
 }
 
+/* تجاوز أي قواعد تعارض */
 .notifications-btn+.notifications-dropdown,
 .notifications-btn~.notifications-dropdown {
-    position: absolute;
-    right: 0 !important;
-    left: unset !important;
+    position: fixed !important;
+    z-index: 10001 !important;
+}
+
+/* التأكد من أن sidebar overflow لا يؤثر على dropdown */
+.sidebar #notifications-dropdown,
+.sidebar .notifications-dropdown {
+    position: fixed !important;
+    z-index: 10001 !important;
 }
 
 /* Responsive styles for notifications dropdown */

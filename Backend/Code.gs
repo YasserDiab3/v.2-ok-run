@@ -27,6 +27,12 @@
  * ============================================
  */
 function doPost(e) {
+    // بصمة نسخة واضحة لتأكيد أن الطلب وصل للنسخة الصحيحة
+    var BUILD_TAG = 'HSE_WEBAPP_BUILD_2026-01-29_v115';
+    Logger.log('🚀 [DOPOST] ===== doPost تم استدعاؤها =====');
+    Logger.log('🏷️ [DOPOST] BUILD_TAG: ' + BUILD_TAG);
+    Logger.log('🚀 [DOPOST] الوقت: ' + new Date().toISOString());
+    
     try {
         // ============================================
         // 1. التحقق من وجود الطلب
@@ -118,6 +124,17 @@ function doPost(e) {
         // ============================================
         let action = postData.action;
         const payload = postData.data || postData;
+        
+        // ✅ Debug logging لمعرفة ما يتم استخراجه
+        Logger.log('🔍 [CODE.GS] postData.action: ' + JSON.stringify(action));
+        Logger.log('🏷️ [CODE.GS] BUILD_TAG: ' + BUILD_TAG);
+        Logger.log('🔍 [CODE.GS] postData.data exists: ' + !!postData.data);
+        Logger.log('🔍 [CODE.GS] postData.data type: ' + typeof postData.data);
+        Logger.log('🔍 [CODE.GS] postData.keys: ' + Object.keys(postData || {}).join(', '));
+        Logger.log('🔍 [CODE.GS] payload type: ' + typeof payload);
+        Logger.log('🔍 [CODE.GS] payload is null: ' + (payload === null));
+        Logger.log('🔍 [CODE.GS] payload is undefined: ' + (payload === undefined));
+        Logger.log('🔍 [CODE.GS] payload keys: ' + (payload ? Object.keys(payload).join(', ') : 'N/A'));
         
         // تنظيف action (إزالة المسافات والحروف غير المرئية)
         if (action && typeof action === 'string') {
@@ -538,7 +555,60 @@ function doPost(e) {
                 // العيادة الطبية (Clinic)
                 // ============================================
                 case 'addClinicVisit':
-                    result = addClinicVisitToSheet(payload);
+                    Logger.log('🚀 [CODE.GS] ===== addClinicVisit action تم استدعاؤها =====');
+                    Logger.log('🚀 [CODE.GS] الوقت: ' + new Date().toISOString());
+                    Logger.log('🏷️ [CODE.GS] BUILD_TAG: ' + BUILD_TAG);
+                    Logger.log('🚀 [CODE.GS] postData keys: ' + Object.keys(postData || {}).join(', '));
+                    Logger.log('🚀 [CODE.GS] postData.data exists: ' + !!postData.data);
+                    Logger.log('🚀 [CODE.GS] postData.data type: ' + typeof postData.data);
+                    Logger.log('🚀 [CODE.GS] payload type: ' + typeof payload);
+                    Logger.log('🚀 [CODE.GS] payload is null: ' + (payload === null));
+                    Logger.log('🚀 [CODE.GS] payload is undefined: ' + (payload === undefined));
+                    Logger.log('🚀 [CODE.GS] payload keys: ' + (payload ? Object.keys(payload).join(', ') : 'N/A'));
+                    Logger.log('🚀 [CODE.GS] payload.createdBy: ' + JSON.stringify(payload?.createdBy));
+                    Logger.log('🚀 [CODE.GS] payload.email: ' + JSON.stringify(payload?.email));
+                    Logger.log('🚀 [CODE.GS] payload.id: ' + JSON.stringify(payload?.id));
+                    Logger.log('🚀 [CODE.GS] payload.employeeName: ' + JSON.stringify(payload?.employeeName));
+                    
+                    // ✅ إصلاح جذري: محاولة استخدام postData.data مباشرة إذا كان payload فارغاً
+                    let visitDataToUse = payload;
+                    if (!visitDataToUse || typeof visitDataToUse !== 'object' || Object.keys(visitDataToUse).length === 0) {
+                        Logger.log('⚠️ [CODE.GS] payload فارغ، محاولة استخدام postData.data مباشرة');
+                        visitDataToUse = postData.data;
+                    }
+                    
+                    // ✅ محاولة أخرى: إذا كان postData يحتوي على البيانات مباشرة (بدون data)
+                    if (!visitDataToUse || typeof visitDataToUse !== 'object' || Object.keys(visitDataToUse).length === 0) {
+                        Logger.log('⚠️ [CODE.GS] postData.data فارغ، محاولة استخدام postData مباشرة (بدون action)');
+                        const postDataCopy = {};
+                        for (var key in postData) {
+                            if (postData.hasOwnProperty(key) && key !== 'action' && key !== 'csrfToken' && key !== 'skipCSRFCheck' && key !== 'skipCSRF') {
+                                postDataCopy[key] = postData[key];
+                            }
+                        }
+                        if (Object.keys(postDataCopy).length > 0) {
+                            visitDataToUse = postDataCopy;
+                            Logger.log('✅ [CODE.GS] تم استخدام postData مباشرة، عدد الحقول: ' + Object.keys(visitDataToUse).length);
+                        }
+                    }
+                    
+                    // ✅ التحقق النهائي
+                    if (!visitDataToUse || typeof visitDataToUse !== 'object' || Object.keys(visitDataToUse).length === 0) {
+                        Logger.log('❌ [CODE.GS] لا يمكن العثور على بيانات الزيارة!');
+                        Logger.log('❌ [CODE.GS] postData كامل: ' + JSON.stringify(postData).substring(0, 500));
+                        result = { success: false, message: 'بيانات الزيارة غير موجودة أو غير صحيحة' };
+                    } else {
+                        Logger.log('✅ [CODE.GS] تم العثور على بيانات الزيارة، عدد الحقول: ' + Object.keys(visitDataToUse).length);
+                        result = addClinicVisitToSheet(visitDataToUse);
+                        // إضافة بصمة نسخة في النتيجة لتسهيل التتبع من الواجهة
+                        try {
+                            if (result && typeof result === 'object') {
+                                result._buildTag = BUILD_TAG;
+                            }
+                        } catch (e) {}
+                        Logger.log('✅ [CODE.GS] addClinicVisitToSheet اكتملت. النتيجة: ' + JSON.stringify(result));
+                    }
+                    Logger.log('🚀 [CODE.GS] ===== addClinicVisit action اكتملت =====');
                     break;
                 case 'updateClinicVisit':
                     result = updateClinicVisit(payload.visitId || payload.id, payload.updateData || payload);
@@ -1955,8 +2025,9 @@ function doPost(e) {
             }
         } catch (switchError) {
             // معالجة الأخطاء في switch statement
-            Logger.log('Error in switch statement for action "' + action + '": ' + switchError.toString());
-            Logger.log('Error stack: ' + (switchError.stack || 'No stack trace'));
+            Logger.log('❌ [CODE.GS] Error in switch statement for action "' + action + '": ' + switchError.toString());
+            Logger.log('❌ [CODE.GS] Error stack: ' + (switchError.stack || 'No stack trace'));
+            Logger.log('❌ [CODE.GS] payload at error: ' + JSON.stringify(payload).substring(0, 500));
             
             result = {
                 success: false,

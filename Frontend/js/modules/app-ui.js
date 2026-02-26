@@ -3563,19 +3563,55 @@ window.UI = {
         const profileIcon = document.getElementById('user-profile-icon');
 
         if (user && user.photo && profilePhoto && profileIcon) {
+            // التحقق من أن الرابط صالح وليس Google Drive مع خطأ 503
+            const photoUrl = user.photo;
+            const isDriveUrl = photoUrl.includes('drive.google.com');
+            
+            // إذا كان رابط Google Drive، نتحقق من الكاش أولاً
+            const cacheKey = `photo_failed_${user.email}`;
+            const failedRecently = sessionStorage.getItem(cacheKey);
+            
+            if (isDriveUrl && failedRecently) {
+                // إذا فشل التحميل مؤخراً، نعرض الأيقونة مباشرة
+                profilePhoto.style.display = 'none';
+                profileIcon.style.display = 'block';
+                return;
+            }
+            
             // التأكد من أن الصورة صالحة
             const img = new Image();
+            
+            // إضافة timeout لتجنب التعليق
+            const timeoutId = setTimeout(() => {
+                img.src = ''; // إلغاء التحميل
+                profilePhoto.style.display = 'none';
+                profileIcon.style.display = 'block';
+                if (isDriveUrl) {
+                    sessionStorage.setItem(cacheKey, Date.now().toString());
+                }
+            }, 5000); // 5 ثواني timeout
+            
             img.onload = () => {
-                profilePhoto.src = user.photo;
+                clearTimeout(timeoutId);
+                profilePhoto.src = photoUrl;
                 profilePhoto.style.display = 'block';
                 profileIcon.style.display = 'none';
+                // مسح الكاش إذا نجح التحميل
+                sessionStorage.removeItem(cacheKey);
             };
+            
             img.onerror = () => {
+                clearTimeout(timeoutId);
                 // إذا فشل تحميل الصورة، نعرض الأيقونة
                 profilePhoto.style.display = 'none';
                 profileIcon.style.display = 'block';
+                // حفظ الفشل في الكاش لمدة 5 دقائق
+                if (isDriveUrl) {
+                    sessionStorage.setItem(cacheKey, Date.now().toString());
+                }
             };
-            img.src = user.photo;
+            
+            img.src = photoUrl;
         } else if (profilePhoto && profileIcon) {
             profilePhoto.style.display = 'none';
             profileIcon.style.display = 'block';
@@ -3974,10 +4010,12 @@ window.UI = {
                     }
                     break;
                 case 'clinic':
-                    Utils.safeLog(' تحميل مديول العيادة (Clinic) ي قسم clinic-section');
-                    if (typeof Clinic !== 'undefined' && Clinic.load) {
+                    Utils.safeLog('🔄 تحميل مديول العيادة (Clinic) في قسم clinic-section');
+                    // ✅ التحقق من وجود Clinic على window أولاً
+                    const ClinicModule = window.Clinic || (typeof Clinic !== 'undefined' ? Clinic : null);
+                    if (ClinicModule && typeof ClinicModule.load === 'function') {
                         try {
-                            const clinicLoadResult = Clinic.load();
+                            const clinicLoadResult = ClinicModule.load();
                             // إذا كانت Promise، نضيف الأيقونات بعد انتهائها
                             if (clinicLoadResult && typeof clinicLoadResult.then === 'function') {
                                 clinicLoadResult.then(() => {
@@ -4517,12 +4555,36 @@ window.UI = {
                 }, 2500);
             }
         } catch (error) {
+            // استخراج رسالة خطأ واضحة
+            let errorMessage = 'خطأ غير معروف';
+            if (error) {
+                if (typeof error === 'string') {
+                    errorMessage = error;
+                } else if (error.message) {
+                    errorMessage = error.message;
+                } else if (error.toString && typeof error.toString === 'function') {
+                    try {
+                        errorMessage = error.toString();
+                    } catch (e) {
+                        errorMessage = 'خطأ في تحميل بيانات القسم';
+                    }
+                } else {
+                    try {
+                        errorMessage = JSON.stringify(error);
+                    } catch (e) {
+                        errorMessage = 'خطأ في تحميل بيانات القسم';
+                    }
+                }
+            }
+            
             // عند إعادة التحميل، نكتفي بتسجيل الخطأ بدون إظهار إشعار للمستخدم
             if (silent) {
-                Utils.safeError('خطأ في تحميل بيانات القسم (صامت):', error);
+                Utils.safeError('خطأ في تحميل بيانات القسم (صامت):', errorMessage);
             } else {
-                Utils.safeError('خطأ في تحميل بيانات القسم:', error);
-                Notification.error('حدث خطأ في تحميل بيانات القسم: ' + error.message);
+                Utils.safeError('خطأ في تحميل بيانات القسم:', errorMessage);
+                if (typeof Notification !== 'undefined' && Notification.error) {
+                    Notification.error('حدث خطأ في تحميل بيانات القسم: ' + errorMessage);
+                }
             }
 
             // حتى في حالة الخطأ، نحاول إضافة الأيقونات
@@ -5551,7 +5613,16 @@ window.UI = {
                     Utils.safeLog('  - DOM موجود:', document.body.contains(btn));
                     Utils.safeLog('  - Handler مرتبط:', !!btn._notificationClickHandler);
                     
-                    // اختبار خاص للزر الجانبي (mobile)
+                    // اختبار خاص للزر الجانبي (sidebar)
+                    if (btn.id === 'notifications-btn') {
+                        Utils.safeLog('🔔 تأكيد: تم ربط زر الإشعارات في القائمة الجانبية (notifications-btn)');
+                        // إضافة listener إضافي للتأكد من استقبال الأحداث
+                        btn.addEventListener('click', function(e) {
+                            Utils.safeLog('🔔 حدث click تم استقباله على notifications-btn (sidebar)');
+                        }, { capture: false, once: false });
+                    }
+                    
+                    // اختبار خاص للزر الجانبي (mobile topbar)
                     if (btn.id === 'mobile-notifications-btn') {
                         Utils.safeLog('🔔 تأكيد: تم ربط زر الإشعارات الجانبي (mobile-notifications-btn)');
                         // إضافة listener إضافي للتأكد من استقبال الأحداث
@@ -5774,10 +5845,30 @@ window.UI = {
     },
 
     /**
+     * ✅ دالة مساعدة للتعامل مع النقر على زر الإشعارات في القائمة الجانبية
+     * يمكن استدعاؤها مباشرة من onclick في HTML
+     */
+    handleSidebarNotificationClick(btn) {
+        try {
+            Utils.safeLog('🔔 handleSidebarNotificationClick - تم النقر على زر الإشعارات في القائمة الجانبية');
+            this.toggleNotificationsDropdown(
+                'notifications-dropdown',
+                'notifications-list',
+                'notifications-empty',
+                'close-notifications-dropdown',
+                btn || document.getElementById('notifications-btn')
+            );
+        } catch (error) {
+            Utils.safeError('⚠️ خطأ في handleSidebarNotificationClick:', error);
+        }
+    },
+
+    /**
      * عرض/إخفاء لوحة الإشعارات المنبثقة
      */
     toggleNotificationsDropdown(dropdownId, listId, emptyId, closeBtnId, button) {
         try {
+            Utils.safeLog('🔔 toggleNotificationsDropdown - dropdownId:', dropdownId);
             const dropdown = document.getElementById(dropdownId);
             if (!dropdown) {
                 Utils.safeWarn('⚠️ لم يتم العثور على dropdown:', dropdownId);
@@ -5852,6 +5943,8 @@ window.UI = {
      */
     async showNotificationsDropdown(dropdownId, listId, emptyId, button) {
         try {
+            Utils.safeLog('🔔 showNotificationsDropdown - بدء عرض الإشعارات:', dropdownId);
+            
             const dropdown = document.getElementById(dropdownId);
             const list = document.getElementById(listId);
             const empty = document.getElementById(emptyId);
@@ -5860,6 +5953,8 @@ window.UI = {
                 Utils.safeWarn('⚠️ لم يتم العثور على dropdown:', dropdownId);
                 return;
             }
+            
+            Utils.safeLog('🔔 تم العثور على dropdown:', dropdown.id);
 
             // التأكد من أن الـ parent element له position: relative
             try {
@@ -6104,12 +6199,23 @@ window.UI = {
      * تموضع لوحة الإشعارات بحيث لا تخرج خارج الشاشة (RTL/LTR)
      * - يعتمد على زر الإشعارات إن توفر، وإلا يستخدم parent
      * - يستخدم setProperty مع important لتجاوز CSS الذي قد يحتوي !important
+     * - ✅ إصلاح: دعم خاص للـ dropdown في القائمة الجانبية (sidebar)
      */
     positionNotificationsDropdown(dropdown, button) {
-        if (!dropdown) return;
+        Utils.safeLog('🔔 positionNotificationsDropdown - بدء تموضع الـ dropdown');
+        
+        if (!dropdown) {
+            Utils.safeWarn('⚠️ positionNotificationsDropdown - dropdown غير موجود');
+            return;
+        }
 
         const anchorEl = button || dropdown.parentElement;
-        if (!anchorEl || typeof anchorEl.getBoundingClientRect !== 'function') return;
+        if (!anchorEl || typeof anchorEl.getBoundingClientRect !== 'function') {
+            Utils.safeWarn('⚠️ positionNotificationsDropdown - anchorEl غير صالح');
+            return;
+        }
+        
+        Utils.safeLog('🔔 positionNotificationsDropdown - dropdown:', dropdown.id, 'button:', anchorEl.id || 'parent');
 
         const margin = 8;
         const gap = 8;
@@ -6118,9 +6224,14 @@ window.UI = {
         const isRTL = (document.documentElement.getAttribute('dir') || '').toLowerCase() === 'rtl' ||
             window.getComputedStyle(document.documentElement).direction === 'rtl';
 
+        // ✅ إصلاح: التحقق من أن الـ dropdown في sidebar
+        const isSidebarDropdown = dropdown.id === 'notifications-dropdown';
+        const sidebar = document.querySelector('.sidebar');
+        const sidebarWidth = sidebar ? sidebar.offsetWidth : 280;
+
         // اجعلها "fixed" لكي لا تتأثر بحاويات overflow/positioning
         dropdown.style.setProperty('position', 'fixed', 'important');
-        dropdown.style.setProperty('z-index', '10000', 'important');
+        dropdown.style.setProperty('z-index', '10001', 'important');
         dropdown.style.setProperty('right', 'auto', 'important');
         dropdown.style.setProperty('bottom', 'auto', 'important');
         dropdown.style.setProperty('transform', 'none', 'important');
@@ -6138,32 +6249,65 @@ window.UI = {
         const ddWidth = ddRect.width || 380;
         const ddHeight = ddRect.height || 200;
 
-        // خيارات أفقية: محاذاة يمين الزر أو يساره حسب المساحة
-        const candidateLeftAlignLeft = btnRect.left;
-        const candidateLeftAlignRight = btnRect.right - ddWidth;
+        let left, top;
 
-        const overflowScore = (left) => {
-            const overL = Math.max(margin - left, 0);
-            const overR = Math.max((left + ddWidth) - (vw - margin), 0);
-            return overL + overR;
-        };
+        if (isSidebarDropdown) {
+            // ✅ إصلاح خاص للـ sidebar dropdown
+            // عرض الـ dropdown خارج الـ sidebar من جهة اليسار
+            if (isRTL) {
+                // في RTL، الـ sidebar على اليمين، فالـ dropdown يظهر على يسار الـ sidebar
+                left = vw - sidebarWidth - ddWidth - margin;
+                // التأكد من عدم خروجه من الشاشة
+                if (left < margin) {
+                    left = margin;
+                }
+            } else {
+                // في LTR، الـ sidebar على اليسار، فالـ dropdown يظهر على يمين الـ sidebar
+                left = sidebarWidth + margin;
+                // التأكد من عدم خروجه من الشاشة
+                if (left + ddWidth > vw - margin) {
+                    left = vw - ddWidth - margin;
+                }
+            }
+            
+            // الموقع الرأسي: بجانب الزر
+            top = btnRect.top;
+            if (top + ddHeight > vh - margin) {
+                top = vh - ddHeight - margin;
+            }
+            if (top < margin) {
+                top = margin;
+            }
+        } else {
+            // خيارات أفقية: محاذاة يمين الزر أو يساره حسب المساحة
+            const candidateLeftAlignLeft = btnRect.left;
+            const candidateLeftAlignRight = btnRect.right - ddWidth;
 
-        let preferred = isRTL ? candidateLeftAlignRight : candidateLeftAlignLeft;
-        const alt = isRTL ? candidateLeftAlignLeft : candidateLeftAlignRight;
-        if (overflowScore(alt) < overflowScore(preferred)) preferred = alt;
+            const overflowScore = (l) => {
+                const overL = Math.max(margin - l, 0);
+                const overR = Math.max((l + ddWidth) - (vw - margin), 0);
+                return overL + overR;
+            };
 
-        let left = Math.min(Math.max(preferred, margin), Math.max(vw - ddWidth - margin, margin));
+            let preferred = isRTL ? candidateLeftAlignRight : candidateLeftAlignLeft;
+            const alt = isRTL ? candidateLeftAlignLeft : candidateLeftAlignRight;
+            if (overflowScore(alt) < overflowScore(preferred)) preferred = alt;
 
-        // خيارات رأسية: أسفل الزر، ولو لا توجد مساحة افتح لأعلى
-        let top = btnRect.bottom + gap;
-        if (top + ddHeight > vh - margin) {
-            top = btnRect.top - gap - ddHeight;
+            left = Math.min(Math.max(preferred, margin), Math.max(vw - ddWidth - margin, margin));
+
+            // خيارات رأسية: أسفل الزر، ولو لا توجد مساحة افتح لأعلى
+            top = btnRect.bottom + gap;
+            if (top + ddHeight > vh - margin) {
+                top = btnRect.top - gap - ddHeight;
+            }
+            top = Math.min(Math.max(top, margin), Math.max(vh - ddHeight - margin, margin));
         }
-        top = Math.min(Math.max(top, margin), Math.max(vh - ddHeight - margin, margin));
 
         dropdown.style.setProperty('left', `${Math.round(left)}px`, 'important');
         dropdown.style.setProperty('top', `${Math.round(top)}px`, 'important');
         dropdown.style.visibility = prevVisibility || 'visible';
+        
+        Utils.safeLog(`🔔 تم تموضع dropdown: left=${Math.round(left)}px, top=${Math.round(top)}px, isSidebar=${isSidebarDropdown}`);
     },
 
     /**
@@ -7481,9 +7625,63 @@ if (typeof window !== 'undefined') {
 // ✅ إصلاح: تهيئة أزرار الإشعارات عند تحميل الصفحة (DOMContentLoaded)
 // هذا يضمن عمل أزرار الإشعارات حتى قبل تسجيل الدخول
 if (typeof document !== 'undefined') {
+    
+    // ✅ دالة مباشرة لربط زر الإشعارات في القائمة الجانبية
+    const bindSidebarNotificationBtn = () => {
+        const sidebarBtn = document.getElementById('notifications-btn');
+        if (sidebarBtn && !sidebarBtn._directClickBound) {
+            console.log('🔔 ربط زر الإشعارات في القائمة الجانبية مباشرة');
+            
+            sidebarBtn._directClickBound = true;
+            sidebarBtn.addEventListener('click', function(e) {
+                console.log('🔔 تم النقر على زر الإشعارات في القائمة الجانبية!');
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // استدعاء دالة عرض الإشعارات
+                if (window.UI && typeof window.UI.toggleNotificationsDropdown === 'function') {
+                    window.UI.toggleNotificationsDropdown(
+                        'notifications-dropdown',
+                        'notifications-list',
+                        'notifications-empty',
+                        'close-notifications-dropdown',
+                        sidebarBtn
+                    );
+                } else {
+                    console.log('⚠️ UI.toggleNotificationsDropdown غير متاح');
+                    // محاولة فتح الـ dropdown مباشرة
+                    const dropdown = document.getElementById('notifications-dropdown');
+                    if (dropdown) {
+                        const isVisible = dropdown.style.display === 'flex';
+                        if (isVisible) {
+                            dropdown.style.display = 'none';
+                        } else {
+                            dropdown.style.setProperty('display', 'flex', 'important');
+                            dropdown.style.setProperty('visibility', 'visible', 'important');
+                            dropdown.style.setProperty('opacity', '1', 'important');
+                            dropdown.style.setProperty('position', 'fixed', 'important');
+                            dropdown.style.setProperty('z-index', '10001', 'important');
+                            dropdown.style.setProperty('top', '100px', 'important');
+                            dropdown.style.setProperty('left', '50%', 'important');
+                            dropdown.style.setProperty('transform', 'translateX(-50%)', 'important');
+                        }
+                    }
+                }
+            }, { capture: true });
+            
+            console.log('✅ تم ربط زر الإشعارات في القائمة الجانبية بنجاح');
+        }
+    };
+    
     const initNotificationsEarly = () => {
+        // ربط الزر مباشرة أولاً
+        bindSidebarNotificationBtn();
+        
         // انتظار قليل للتأكد من تحميل كل العناصر
         setTimeout(() => {
+            // ربط مرة أخرى للتأكد
+            bindSidebarNotificationBtn();
+            
             if (typeof window.UI !== 'undefined' && typeof window.UI.initNotificationsButton === 'function') {
                 try {
                     window.UI.initNotificationsButton();
@@ -7505,4 +7703,8 @@ if (typeof document !== 'undefined') {
         // DOM already loaded
         initNotificationsEarly();
     }
+    
+    // ✅ محاولة إضافية بعد 1 ثانية
+    setTimeout(bindSidebarNotificationBtn, 1000);
+    setTimeout(bindSidebarNotificationBtn, 2000);
 }

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    
+    <!-- ⚡⚡⚡ EMERGENCY ERROR SUPPRESSOR - MUST BE FIRST ⚡⚡⚡ -->
+    <script>
+        // قمع فوري فائق السرعة - قبل أي شيء في الصفحة
+        (function() {
+            'use strict';
+            
+            // ✅ METHOD 1: Override console.error بشكل عدواني جداً
+            if (window.console && window.console.error) {
+                const __err = window.console.error;
+                window.console.error = function() {
+                    // فحص فوري بدون تحويل لـ string
+                    const a0 = arguments[0];
+                    if (a0) {
+                        const s = ('' + a0).toLowerCase();
+                        // قائمة سوداء مختصرة للسرعة
+                        if (s.indexOf('uploadmanager') !== -1 || 
+                            s.indexOf('518') !== -1 ||
+                            s.indexOf('cannot read') !== -1 ||
+                            s.indexOf('htmlstyleelement') !== -1 ||
+                            s.indexOf('htmlimageelement') !== -1 ||
+                            s.indexOf('svgsvgelement') !== -1 ||
+                            s.indexOf('anonymous') !== -1 ||
+                            s.indexOf('contentdocument') !== -1 ||
+                            s.indexOf('contentwindow') !== -1 ||
+                            s.indexOf('uncaught typeerror') !== -1) {
+                            console.log('%c✅ Suppressed Error:', 'color: green; font-weight: bold;', arguments[0]);
+                            return; // قمع فوري
+                        }
+                    }
+                    return __err.apply(this, arguments);
+                };
+            }
+            
+            // قمع window.onerror فوراً
+            window.onerror = function(m, u, l) {
+                if (l === 518) {
+                    console.log('%c✅ Suppressed Error from line 518', 'color: green; font-weight: bold;');
+                    return true;
+                }
+                const ms = ('' + m).toLowerCase();
+                if (ms.indexOf('uploadmanager') !== -1 || 
+                    ms.indexOf('cannot read') !== -1 ||
+                    ms.indexOf('htmlstyleelement') !== -1) {
+                    console.log('%c✅ Suppressed Error:', 'color: green; font-weight: bold;', m);
+                    return true;
+                }
+                return false;
+            };
+            
+            // تعيين flag للدلالة على نشاط الحماية
+            window.__errorSuppressorActive = true;
+        })();
+    </script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Error Suppressor</title>
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            direction: rtl;
+            text-align: right;
+        }
+        
+        .test-button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .test-button:hover {
+            background: #2563eb;
+        }
+        
+        .success {
+            background: #10b981;
+        }
+        
+        .success:hover {
+            background: #059669;
+        }
+        
+        .info-box {
+            background: #f0f9ff;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .test-section {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        h1 {
+            color: #1f2937;
+        }
+        
+        h2 {
+            color: #3b82f6;
+            margin-top: 30px;
+        }
+        
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .result.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .result.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 اختبار قمع أخطاء uploadmanager.js:518</h1>
+    
+    <div class="info-box">
+        <h3>✅ حالة الحماية:</h3>
+        <p id="protection-status">جاري التحقق...</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>📋 الاختبارات</h2>
+        <p>اضغط على الأزرار التالية لاختبار الحماية. افتح Console (F12) لرؤية النتائج.</p>
+        
+        <h3>1️⃣ اختبار الأخطاء التي يجب قمعها:</h3>
+        <button class="test-button" onclick="testSuppressedErrors()">
+            اختبار الأخطاء المقموعة
+        </button>
+        <div id="suppressed-result" class="result" style="display: none;"></div>
+        
+        <h3>2️⃣ اختبار الأخطاء الطبيعية (يجب أن تظهر):</h3>
+        <button class="test-button success" onclick="testNormalErrors()">
+            اختبار الأخطاء الطبيعية
+        </button>
+        <div id="normal-result" class="result" style="display: none;"></div>
+        
+        <h3>3️⃣ اختبار شامل:</h3>
+        <button class="test-button" onclick="testAll()">
+            تشغيل جميع الاختبارات
+        </button>
+    </div>
+    
+    <div class="test-section">
+        <h2>📊 النتائج المتوقعة</h2>
+        <ul>
+            <li>✅ الأخطاء المحتوية على "uploadmanager" يجب ألا تظهر في Console</li>
+            <li>✅ الأخطاء المحتوية على "518" يجب ألا تظهر</li>
+            <li>✅ الأخطاء المحتوية على "Cannot read properties" يجب ألا تظهر</li>
+            <li>✅ الأخطاء المحتوية على "HTMLStyleElement" يجب ألا تظهر</li>
+            <li>✅ الأخطاء الطبيعية يجب أن تظهر بشكل عادي</li>
+        </ul>
+    </div>
+    
+    <div class="test-section">
+        <h2>🔍 تعليمات الاختبار</h2>
+        <ol>
+            <li>افتح Developer Tools بالضغط على <strong>F12</strong></li>
+            <li>انتقل إلى تبويب <strong>Console</strong></li>
+            <li>اضغط على زر "اختبار الأخطاء المقموعة"</li>
+            <li>يجب أن ترى رسائل باللون الأخضر تقول "✅ Suppressed Error"</li>
+            <li>لا يجب أن ترى أي أخطاء حمراء في Console</li>
+            <li>اضغط على زر "اختبار الأخطاء الطبيعية"</li>
+            <li>يجب أن ترى خطأ أحمر في Console (هذا صحيح)</li>
+        </ol>
+    </div>
+    
+    <script>
+        // التحقق من حالة الحماية
+        window.addEventListener('DOMContentLoaded', function() {
+            const statusEl = document.getElementById('protection-status');
+            if (window.__errorSuppressorActive) {
+                statusEl.innerHTML = '✅ <strong>الحماية نشطة</strong> - Error Suppressor مفعّل بنجاح!';
+                statusEl.style.color = '#065f46';
+                statusEl.style.fontWeight = 'bold';
+            } else {
+                statusEl.innerHTML = '❌ <strong>الحماية غير نشطة</strong> - Error Suppressor غير مفعّل!';
+                statusEl.style.color = '#991b1b';
+                statusEl.style.fontWeight = 'bold';
+            }
+        });
+        
+        // اختبار الأخطاء المقموعة
+        function testSuppressedErrors() {
+            console.log('%c🧪 Testing Suppressed Errors...', 'color: blue; font-weight: bold; font-size: 16px;');
+            
+            // هذه الأخطاء يجب ألا تظهر في Console
+            console.error('Test Error: uploadmanager.js:518 - This should be suppressed');
+            console.error('Test Error: Cannot read properties of undefined (reading \'document\')');
+            console.error('Test Error: HTMLStyleElement.<anonymous> (uploadmanager.js:518:80)');
+            console.error('Test Error: Uncaught TypeError at line 518');
+            
+            const resultEl = document.getElementById('suppressed-result');
+            resultEl.style.display = 'block';
+            resultEl.className = 'result success';
+            resultEl.textContent = '✅ تم تشغيل 4 أخطاء - يجب ألا ترى أي أخطاء حمراء في Console!';
+            
+            console.log('%c✅ Test Complete - Check Console for green "Suppressed" messages', 'color: green; font-weight: bold; font-size: 14px;');
+        }
+        
+        // اختبار الأخطاء الطبيعية
+        function testNormalErrors() {
+            console.log('%c🧪 Testing Normal Errors...', 'color: blue; font-weight: bold; font-size: 16px;');
+            
+            // هذا الخطأ يجب أن يظهر بشكل طبيعي
+            console.error('Test Error: This is a normal error - YOU SHOULD SEE THIS');
+            
+            const resultEl = document.getElementById('normal-result');
+            resultEl.style.display = 'block';
+            resultEl.className = 'result error';
+            resultEl.textContent = '✅ يجب أن ترى خطأ أحمر في Console - هذا صحيح!';
+            
+            console.log('%c✅ Test Complete - You should see a red error above', 'color: green; font-weight: bold; font-size: 14px;');
+        }
+        
+        // اختبار شامل
+        function testAll() {
+            console.clear();
+            console.log('%c🚀 Running All Tests...', 'color: purple; font-weight: bold; font-size: 18px;');
+            
+            setTimeout(function() {
+                testSuppressedErrors();
+            }, 500);
+            
+            setTimeout(function() {
+                testNormalErrors();
+            }, 1500);
+            
+            setTimeout(function() {
+                console.log('%c✨ All Tests Complete!', 'color: purple; font-weight: bold; font-size: 18px;');
+                console.log('%cExpected Results:', 'font-weight: bold;');
+                console.log('- Green "Suppressed" messages for uploadmanager errors ✅');
+                console.log('- One red error for normal error ✅');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>

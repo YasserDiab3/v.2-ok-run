@@ -1784,6 +1784,9 @@ const Employees = {
                         // ✅ تطبيق جميع الفلاتر بعد تحميل القائمة (مع التأكد من showInactive)
                         await this.applyFilters();
                         
+                        // ✅ تحديث عدد المستقيلين بعد تطبيق الفلاتر
+                        this.updateInactiveCount();
+                        
                         // ✅ إظهار إشعار
                         if (typeof Notification !== 'undefined') {
                             Notification.success(isChecked ? 
@@ -1805,11 +1808,15 @@ const Employees = {
                         if (typeof Loading !== 'undefined') {
                             Loading.hide();
                         }
+                        // ✅ تحديث عدد المستقيلين دائماً في النهاية
+                        this.updateInactiveCount();
                     }
                 });
                 
-                // ✅ تحديث عدد المستقيلين عند تحميل الصفحة
+                // ✅ تحديث عدد المستقيلين عند تحميل الصفحة (مع تأخير للتأكد من جاهزية الـ DOM)
                 this.updateInactiveCount();
+                // ✅ تحديث إضافي بعد 300ms لضمان ظهور العدد
+                setTimeout(() => this.updateInactiveCount(), 300);
             } else {
                 if (AppState.debugMode) {
                     Utils.safeWarn('⚠️ زر عرض المستقيلين غير موجود!');
@@ -1819,6 +1826,8 @@ const Employees = {
             // ✅ تحديث عدد المستقيلين عند تحديث البيانات
             window.addEventListener('employeesDataUpdated', () => {
                 this.updateInactiveCount();
+                // ✅ تحديث إضافي للتأكد من الظهور
+                setTimeout(() => this.updateInactiveCount(), 100);
             });
             
             // ✅ تطبيق الفلاتر عند تحميل الصفحة إذا كان هناك قيم
@@ -3493,6 +3502,8 @@ const Employees = {
         try {
             const filters = this.getFilterValues();
             await this.filterEmployees(filters.search, filters.showInactive, filters);
+            // ✅ تحديث عدد المستقيلين بعد تطبيق الفلاتر
+            this.updateInactiveCount();
         } catch (error) {
             // معالجة الأخطاء بشكل صحيح
             if (typeof Utils !== 'undefined' && Utils.safeError) {
@@ -3500,6 +3511,9 @@ const Employees = {
             } else {
                 console.error('❌ خطأ في applyFilters:', error);
             }
+        } finally {
+            // ✅ تحديث عدد المستقيلين دائماً بعد تطبيق الفلاتر
+            this.updateInactiveCount();
         }
     },
     
@@ -3536,35 +3550,96 @@ const Employees = {
             showInactiveCheckbox.checked = false;
         }
         
+        // ✅ إعادة تعيين مظهر الزر
+        const container = document.getElementById('show-inactive-employees-container');
+        if (container) {
+            container.style.background = 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)';
+            container.style.borderColor = '#dee2e6';
+            container.style.boxShadow = 'none';
+        }
+        
         // تطبيق الفلاتر (جميعها فارغة)
         await this.applyFilters();
+        
+        // ✅ تحديث عدد المستقيلين بعد إعادة التعيين
+        this.updateInactiveCount();
     },
     
     /**
      * تحديث عدد المستقيلين في الزر
+     * @param {number} retryCount - عدد محاولات إعادة المحاولة (داخلي)
      */
-    updateInactiveCount() {
-        try {
-            const employees = AppState.appData.employees || [];
-            const inactiveCount = employees.filter(e => e.status === 'inactive').length;
-            
-            const countBadge = document.getElementById('inactive-employees-count');
-            if (countBadge) {
-                countBadge.textContent = inactiveCount;
+    updateInactiveCount(retryCount = 0) {
+        const maxRetries = 3;
+        const retryDelay = 100; // مللي ثانية
+        
+        const doUpdate = () => {
+            try {
+                const employees = AppState.appData.employees || [];
+                const inactiveCount = employees.filter(e => e.status === 'inactive').length;
                 
-                // ✅ إظهار الشارة دائماً بشكل ثابت (حتى لو كان العدد صفر)
-                countBadge.style.display = 'inline-flex';
-                countBadge.style.visibility = 'visible';
-                countBadge.style.opacity = '1';
+                const countBadge = document.getElementById('inactive-employees-count');
+                if (countBadge) {
+                    // ✅ تحديث المحتوى
+                    countBadge.textContent = inactiveCount;
+                    
+                    // ✅ إظهار الشارة دائماً بشكل ثابت (حتى لو كان العدد صفر)
+                    // استخدام setAttribute لضمان تطبيق الأنماط بشكل صحيح
+                    countBadge.style.cssText = `
+                        display: inline-flex !important;
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                        align-items: center;
+                        justify-content: center;
+                        min-width: 24px;
+                        height: 22px;
+                        padding: 0 8px;
+                        background: #dc2626;
+                        color: white;
+                        border-radius: 11px;
+                        font-size: 11px;
+                        font-weight: 700;
+                        margin-right: 4px;
+                        box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+                        transition: all 0.3s ease;
+                    `;
+                    
+                    // ✅ تطبيق تأثير خاص إذا كان checkbox مفعل
+                    const checkbox = document.getElementById('show-inactive-employees');
+                    if (checkbox && checkbox.checked) {
+                        countBadge.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)';
+                        countBadge.style.boxShadow = '0 2px 6px rgba(220, 38, 38, 0.4)';
+                        countBadge.style.transform = 'scale(1.1)';
+                    } else {
+                        countBadge.style.transform = 'scale(1)';
+                    }
+                    
+                    if (AppState.debugMode) {
+                        Utils.safeLog(`📊 عدد المستقيلين: ${inactiveCount}`);
+                    }
+                } else if (retryCount < maxRetries) {
+                    // ✅ إذا لم يوجد العنصر، إعادة المحاولة بعد تأخير
+                    if (AppState.debugMode) {
+                        Utils.safeLog(`⏳ العنصر غير موجود، إعادة المحاولة ${retryCount + 1}/${maxRetries}...`);
+                    }
+                    setTimeout(() => {
+                        this.updateInactiveCount(retryCount + 1);
+                    }, retryDelay);
+                } else if (AppState.debugMode) {
+                    Utils.safeWarn('⚠️ تعذر العثور على عنصر عداد المستقيلين بعد عدة محاولات');
+                }
+            } catch (error) {
+                if (AppState.debugMode) {
+                    Utils.safeWarn('خطأ في تحديث عدد المستقيلين:', error);
+                }
             }
-            
-            if (AppState.debugMode) {
-                Utils.safeLog(`📊 عدد المستقيلين: ${inactiveCount}`);
-            }
-        } catch (error) {
-            if (AppState.debugMode) {
-                Utils.safeWarn('خطأ في تحديث عدد المستقيلين:', error);
-            }
+        };
+        
+        // ✅ استخدام requestAnimationFrame لضمان أن الـ DOM جاهز
+        if (retryCount === 0) {
+            requestAnimationFrame(doUpdate);
+        } else {
+            doUpdate();
         }
     },
 

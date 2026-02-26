@@ -1,0 +1,119 @@
+==========================================
+Google Apps Script - النسخة المعيارية
+Modular Version - HSE Management System
+==========================================
+
+الإصدار: 1.0.0
+تاريخ الإنشاء: 2024
+الحالة: جاهز للعمل ✅
+
+==========================================
+الملفات المطلوبة:
+==========================================
+
+الملفات الأساسية (4 ملفات - مطلوبة):
+1. Code.gs - نقطة الدخول الرئيسية
+2. Config.gs - الإعدادات والثوابت
+3. Utils.gs - الدوال المساعدة المشتركة
+4. Headers.gs - الرؤوس الافتراضية
+
+الملفات الاختيارية (23 ملف - حسب الحاجة):
+5. Users.gs - المستخدمين
+6. Incidents.gs - الحوادث
+7. NearMiss.gs - الحوادث الوشيكة
+8. PTW.gs - تصاريح العمل
+9. Training.gs - التدريب
+10. Clinic.gs - العيادة
+11. FireEquipment.gs - معدات الحريق
+12. PPE.gs - معدات الحماية الشخصية
+13. Violations.gs - المخالفات
+14. Contractors.gs - المقاولين
+15. Employees.gs - الموظفين
+16. Safety.gs - السلامة
+17. ISO.gs - نظام ISO
+18. RiskAssessment.gs - تقييم المخاطر
+19. HSE.gs - HSE الشامل
+20. Environmental.gs - البيئة
+21. PeriodicInspection.gs - الفحوصات الدورية
+22. Emergency.gs - الطوارئ
+23. Budget.gs - الميزانية
+24. KPIs.gs - مؤشرات الأداء
+25. ActionTracking.gs - متابعة الإجراءات
+26. Logs.gs - السجلات
+27. AI.gs - الذكاء الاصطناعي
+
+==========================================
+المميزات:
+==========================================
+
+✅ منظم - كل موديول في ملف منفصل
+✅ سهل الصيانة - يمكن تعديل موديول واحد
+✅ قابل للتوسع - سهل إضافة موديولات جديدة
+✅ مكتمل - جميع الموديولات متوفرة
+✅ مختبر - جاهز للنشر مباشرة
+
+==========================================
+الإجراءات المدعومة (60+):
+==========================================
+
+- saveToSheet, appendToSheet, readFromSheet, initializeSheets
+- addUser, addIncident, addNearMiss, addPTW, addTraining
+- addClinicVisit, addMedication, addSickLeave, addInjury
+- addViolation, addContractor, addEmployee, addBehavior
+- addChemicalSafety, addObservation, addISODocument
+- addISOProcedure, addISOForm, addSOPJHA, addRiskAssessment
+- addLegalDocument, addHSEAudit, addHSENonConformity
+- addHSECorrectiveAction, addHSEObjective, addHSERiskAssessment
+- addEnvironmentalAspect, addEnvironmentalMonitoring
+- addSustainability, addCarbonFootprint, addWasteManagement
+- addEnergyEfficiency, addWaterManagement, addRecyclingProgram
+- addFireEquipment, addPPE, addClinicInventory
+- addPeriodicInspection, addBudget, addKPI, addActionTracking
+- addEmergencyAlert, addEmergencyPlan
+- addEmployeeTrainingMatrix, addContractorTraining
+- addPeriodicInspectionCategory, addPeriodicInspectionChecklist
+- addPeriodicInspectionSchedule, addPeriodicInspectionRecord
+- addFireEquipmentAsset, addFireEquipmentInspection
+- addViolationType, addSafetyBudgets, addSafetyBudgetTransaction
+- addPPEMatrix, addApprovedContractor, addContractorEvaluation
+- addAuditLog, addUserActivityLog
+- addAIAssistantSettings, addUserAILog
+- addObservationSite, addAnnualTrainingPlan
+
+==========================================
+الأوراق المدعومة (60+):
+==========================================
+
+Users, Incidents, NearMiss, PTW, Training, ClinicVisits
+Medications, SickLeave, Injuries, ClinicInventory
+FireEquipment, PPE, Violations, Contractors, Employees
+BehaviorMonitoring, ChemicalSafety, DailyObservations
+ISODocuments, ISOProcedures, ISOForms, SOPJHA
+RiskAssessments, LegalDocuments, HSEAudits
+HSENonConformities, HSECorrectiveActions, HSEObjectives
+HSERiskAssessments, EnvironmentalAspects
+EnvironmentalMonitoring, Sustainability, CarbonFootprint
+WasteManagement, EnergyEfficiency, WaterManagement
+RecyclingPrograms, PeriodicInspections
+PeriodicInspectionCategories, PeriodicInspectionChecklists
+PeriodicInspectionSchedules, PeriodicInspectionRecords
+SafetyBudget, SafetyBudgets, SafetyBudgetTransactions
+SafetyPerformanceKPIs, ActionTrackingRegister, Budget, KPIs
+EmergencyAlerts, EmergencyPlans, EmployeeTrainingMatrix
+ContractorTrainings, FireEquipmentAssets
+FireEquipmentInspections, ViolationTypes, PPEMatrix
+ApprovedContractors, ContractorEvaluations
+AuditLog, UserActivityLog, AIAssistantSettings, UserAILog
+ObservationSites, AnnualTrainingPlans
+
+==========================================
+ملاحظات:
+==========================================
+
+⚠️ لا تستخدم هذه النسخة مع النسخة الأحادية
+✅ مناسبة للمطورين أو للمشاريع الكبيرة
+✅ يمكنك إضافة أو حذف موديولات حسب الحاجة
+✅ الملفات الأساسية (Code, Config, Utils, Headers) مطلوبة
+
+==========================================
+

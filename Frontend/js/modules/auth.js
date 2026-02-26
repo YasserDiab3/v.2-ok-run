@@ -422,8 +422,34 @@ window.Auth = {
                 }
             }
 
+            // ✅ تشخيص: عرض قيمة name الأصلية من foundUser
+            console.log('🔍 [AUTH] foundUser.name الأصلي:', {
+                value: foundUser.name,
+                type: typeof foundUser.name,
+                isObject: typeof foundUser.name === 'object',
+                stringified: JSON.stringify(foundUser.name)
+            });
+
+            // ✅ تطبيع name إذا كان object
+            let extractedName = foundUser.name;
+            if (typeof foundUser.name === 'object' && foundUser.name !== null) {
+                if (foundUser.name.value) {
+                    extractedName = String(foundUser.name.value).trim();
+                } else {
+                    const values = Object.values(foundUser.name);
+                    if (values.length === 1 && typeof values[0] === 'string') {
+                        extractedName = String(values[0]).trim();
+                    } else {
+                        extractedName = String(foundUser.name).trim();
+                    }
+                }
+                console.log('✅ [AUTH] تم استخراج name من object:', extractedName);
+            } else if (typeof foundUser.name === 'string') {
+                extractedName = foundUser.name.trim();
+            }
+
             user = {
-                name: foundUser.name || 'مستخدم',
+                name: extractedName || 'مستخدم',
                 password: foundUser.password || '***',
                 passwordHash: foundUser.passwordHash || '',
                 role: foundUser.role || 'user',
@@ -432,6 +458,8 @@ window.Auth = {
                 id: foundUser.id,
                 email: foundUser.email
             };
+
+            console.log('✅ [AUTH] user.name النهائي:', user.name);
 
             Utils.safeLog('📋 بيانات المستخدم المحضرة:', {
                 email: user.email,
@@ -682,9 +710,41 @@ window.Auth = {
 
         const isBootstrap = this.isBootstrapEmail(email) && !this.isBootstrapDisabled();
 
+        // ✅ الحل الجذري: التأكد من وجود name صحيح
+        // إذا كان user.name فارغًا، نستخدم email كبديل
+        // ✅ إصلاح جذري: التأكد من أن userName ليس "النظام" أو فارغ
+        let userName = (user.name || user.displayName || '').trim();
+        
+        // ✅ إذا كان userName فارغ أو "النظام"، نستخدم email
+        if (!userName || userName === 'النظام' || userName === '') {
+            userName = email;
+            console.log('⚠️ [AUTH] user.name كان فارغ أو "النظام"، استخدام email:', userName);
+        }
+        
+        // ✅ التحقق النهائي: إذا كان userName لا يزال فارغ، نستخدم id كبديل
+        if (!userName || userName === 'النظام' || userName === '') {
+            userName = (fullUserData?.id || user.id || '').toString().trim();
+            if (userName) {
+                console.log('⚠️ [AUTH] user.name و email كانا فارغين، استخدام id:', userName);
+            }
+        }
+        
+        // ✅ التحقق النهائي: إذا كان userName لا يزال فارغ، نستخدم "مستخدم" كبديل
+        if (!userName || userName === 'النظام' || userName === '') {
+            userName = 'مستخدم';
+            console.log('⚠️ [AUTH] لا يمكن الحصول على اسم المستخدم، استخدام "مستخدم" كبديل');
+        }
+        
+        console.log('🔍 [AUTH] تعيين AppState.currentUser:', {
+            originalName: user.name,
+            displayName: user.displayName,
+            email: email,
+            finalName: userName
+        });
+        
         AppState.currentUser = {
             email,
-            name: user.name,
+            name: userName, // ✅ استخدام userName بدلاً من user.name مباشرة
             role: user.role || 'user',
             department: user.department || '',
             permissions: userPermissions,
@@ -696,6 +756,7 @@ window.Auth = {
             loginTime: loginTime
         };
 
+        console.log('✅ [AUTH] AppState.currentUser.name النهائي:', AppState.currentUser.name);
         Utils.safeLog('✅ تسجيل الدخول ناجح:', AppState.currentUser);
         Utils.safeLog('📋 الصلاحيات:', AppState.currentUser.permissions);
 
@@ -1291,19 +1352,28 @@ window.Auth = {
                         // لأنه قد يكون هناك تأخير في تحميل البيانات من Google Sheets
                         if (foundUser) {
                             // استخدام بيانات المستخدم الكاملة من قاعدة البيانات
+                            // ✅ ضمان name صحيح حتى في الاستعادة
+                            const mergedName = (foundUser.name || foundUser.displayName || '').trim() || user.email || user.name || '';
+                            
                             AppState.currentUser = {
                                 ...user,
                                 ...foundUser,
+                                name: mergedName,
                                 passwordHash: foundUser.passwordHash || user.passwordHash,
                                 password: '***', // إخفاء كلمة المرور
                                 loginTime: user.loginTime || AppState.currentUser?.loginTime // الحفاظ على وقت تسجيل الدخول
                             };
                             
+                            console.log('✅ [AUTH] AppState.currentUser.name بعد الاستعادة (sessionStorage):', AppState.currentUser.name);
+                            
                             // ✅ إصلاح: تحديث الجلسة بالبيانات الجديدة من قاعدة البيانات
                             this.updateUserSession();
                         } else {
                             // استخدام بيانات المستخدم من الجلسة المحفوظة
-                            AppState.currentUser = user;
+                            AppState.currentUser = {
+                                ...user,
+                                name: (user.name || user.displayName || '').trim() || user.email || user.id || ''
+                            };
                             Utils.safeLog('⚠️ استخدام بيانات المستخدم من الجلسة (لم يُعثر عليه في قاعدة البيانات بعد)');
                             
                             // ✅ إصلاح: محاولة تحديث الجلسة بعد تحميل البيانات (إذا لم تكن محملة بعد)
@@ -1329,14 +1399,19 @@ window.Auth = {
                                     if (dbUser) {
                                         // تم العثور على المستخدم - تحديث الجلسة
                                         // ✅ إصلاح: الحفاظ على جميع البيانات المهمة من الجلسة الحالية
+                                        const mergedName = (dbUser.name || dbUser.displayName || '').trim() || user.email || user.name || '';
+                                        
                                         AppState.currentUser = {
                                             ...user, // الحفاظ على بيانات الجلسة الأصلية
                                             ...dbUser, // دمج بيانات قاعدة البيانات
+                                            name: mergedName,
                                             passwordHash: dbUser.passwordHash || user.passwordHash,
                                             password: '***',
                                             loginTime: user.loginTime || AppState.currentUser?.loginTime, // الحفاظ على وقت تسجيل الدخول
                                             id: dbUser.id || user.id || AppState.currentUser?.id // الحفاظ على ID
                                         };
+                                        
+                                        console.log('✅ [AUTH] AppState.currentUser.name بعد التحديث التلقائي (sessionStorage):', AppState.currentUser.name);
                                         
                                         // تحديث الجلسة فقط إذا كانت هناك تغييرات فعلية
                                         this.updateUserSession();
@@ -1430,19 +1505,34 @@ window.Auth = {
                         // نقبل المستخدم حتى لو لم نجده في قاعدة البيانات
                         if (foundUser) {
                             // استخدام بيانات المستخدم الكاملة من قاعدة البيانات
+                            // ✅ الحل الجذري: التأكد من وجود name صحيح
+                            // ✅ إصلاح: استخدام الاسم فقط (وليس email)
+                            let mergedName = (foundUser.name || foundUser.displayName || '').trim();
+                            
+                            // ✅ إذا كان mergedName فارغ أو "النظام"، نستخدم "مستخدم" كبديل
+                            if (!mergedName || mergedName === 'النظام' || mergedName === '') {
+                                mergedName = 'مستخدم';
+                            }
+                            
                             AppState.currentUser = {
                                 ...user,
                                 ...foundUser,
+                                name: mergedName, // ✅ استخدام mergedName
                                 passwordHash: foundUser.passwordHash || user.passwordHash,
                                 password: '***', // إخفاء كلمة المرور
                                 loginTime: user.loginTime || AppState.currentUser?.loginTime // الحفاظ على وقت تسجيل الدخول
                             };
                             
+                            console.log('✅ [AUTH] AppState.currentUser.name بعد الاستعادة (localStorage):', AppState.currentUser.name);
+                            
                             // ✅ إصلاح: تحديث الجلسة بالبيانات الجديدة من قاعدة البيانات
                             this.updateUserSession();
                         } else {
                             // استخدام بيانات المستخدم من localStorage
-                            AppState.currentUser = user;
+                            AppState.currentUser = {
+                                ...user,
+                                name: (user.name || user.displayName || '').trim() || user.email || user.id || ''
+                            };
                             Utils.safeLog('⚠️ استخدام بيانات المستخدم من localStorage (لم يُعثر عليه في قاعدة البيانات بعد)');
                             
                             // ✅ إصلاح: محاولة تحديث الجلسة بعد تحميل البيانات (إذا لم تكن محملة بعد)
@@ -1468,14 +1558,19 @@ window.Auth = {
                                     if (dbUser) {
                                         // تم العثور على المستخدم - تحديث الجلسة
                                         // ✅ إصلاح: الحفاظ على جميع البيانات المهمة من الجلسة الحالية
+                                        const mergedName = (dbUser.name || dbUser.displayName || '').trim() || user.email || user.name || '';
+                                        
                                         AppState.currentUser = {
                                             ...user, // الحفاظ على بيانات الجلسة الأصلية
                                             ...dbUser, // دمج بيانات قاعدة البيانات
+                                            name: mergedName,
                                             passwordHash: dbUser.passwordHash || user.passwordHash,
                                             password: '***',
                                             loginTime: user.loginTime || AppState.currentUser?.loginTime, // الحفاظ على وقت تسجيل الدخول
                                             id: dbUser.id || user.id || AppState.currentUser?.id // الحفاظ على ID
                                         };
+                                        
+                                        console.log('✅ [AUTH] AppState.currentUser.name بعد التحديث التلقائي (localStorage):', AppState.currentUser.name);
                                         
                                         // تحديث الجلسة فقط إذا كانت هناك تغييرات فعلية
                                         this.updateUserSession();
@@ -1582,9 +1677,23 @@ window.Auth = {
                     : {};
             
             // تحديث AppState.currentUser بالبيانات الجديدة من قاعدة البيانات
+            // ✅ الحل الجذري: التأكد من وجود name صحيح عند التحديث
+            // ✅ إصلاح: استخدام الاسم فقط من قاعدة البيانات (وليس email)
+            let updatedName = (dbUser.name || dbUser.displayName || '').trim();
+            
+            // ✅ إذا كان updatedName فارغ أو "النظام"، نستخدم AppState.currentUser.name
+            if (!updatedName || updatedName === 'النظام' || updatedName === '') {
+                updatedName = (AppState.currentUser.name || '').toString().trim();
+            }
+            
+            // ✅ إذا كان updatedName لا يزال فارغ، نستخدم "مستخدم" كبديل
+            if (!updatedName || updatedName === 'النظام' || updatedName === '') {
+                updatedName = 'مستخدم';
+            }
+            
             AppState.currentUser = {
                 ...AppState.currentUser,
-                name: dbUser.name || AppState.currentUser.name,
+                name: updatedName, // ✅ استخدام updatedName بدلاً من dbUser.name مباشرة
                 role: dbUser.role || AppState.currentUser.role,
                 department: dbUser.department || AppState.currentUser.department,
                 permissions: finalPermissions, // استخدام الصلاحيات المطبعة والمدققة
@@ -1593,6 +1702,8 @@ window.Auth = {
                 id: dbUser.id || AppState.currentUser.id, // الحفاظ على ID
                 loginTime: AppState.currentUser.loginTime // الحفاظ على وقت تسجيل الدخول
             };
+            
+            console.log('✅ [AUTH] AppState.currentUser.name بعد التحديث:', AppState.currentUser.name);
 
             // ✅ إصلاح: حفظ الجلسة بشكل آمن (بدون passwordHash)
             // التأكد من أن الصلاحيات هي كائن صالح قبل الحفظ

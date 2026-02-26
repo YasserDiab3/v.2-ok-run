@@ -193,6 +193,12 @@ const Contractors = {
             // ✅ إنشاء AbortController جديد
             this._abortController = new AbortController();
             
+            // ✅ إزالة data-listener-attached من جميع الأزرار لإتاحة إعادة ربط الـ listeners
+            const elementsWithListeners = document.querySelectorAll('[data-listener-attached]');
+            elementsWithListeners.forEach(el => {
+                el.removeAttribute('data-listener-attached');
+            });
+            
             // ✅ إزالة broadcast listener إذا كان موجوداً
             if (this._broadcastListener && typeof RealtimeSyncManager !== 'undefined' && 
                 RealtimeSyncManager.state?.broadcastChannel) {
@@ -589,6 +595,11 @@ const Contractors = {
         if (activeContent) {
             activeContent.classList.add('active');
             activeContent.style.display = 'block';
+        }
+
+        // ✅ عند التبديل إلى تبويب التقييمات، التأكد من ربط event listeners
+        if (tab === 'evaluations') {
+            this.ensureEvaluationsEventListeners();
         }
     },
 
@@ -3113,11 +3124,80 @@ const Contractors = {
     },
 
     renderEvaluationsTable(contractorId = '') {
-        const records = (AppState.appData.contractorEvaluations || []).slice().sort((a, b) => {
+        // ✅ إصلاح: تجميع البنود من صفوف منفصلة
+        const allRecords = AppState.appData.contractorEvaluations || [];
+        
+        // تجميع البنود حسب evaluationId
+        const evaluationsMap = new Map();
+        
+        allRecords.forEach(record => {
+            const evalId = record.id || record.evaluationId;
+            if (!evalId) return;
+            
+            // تصفية حسب contractorId إذا كان محدداً
+            if (contractorId && record.contractorId !== contractorId) return;
+            
+            if (!evaluationsMap.has(evalId)) {
+                // ✅ إصلاح: تحويل finalScore إلى رقم إذا كان نصاً
+                let finalScore = record.finalScore;
+                if (typeof finalScore === 'string' && finalScore !== '') {
+                    finalScore = parseFloat(finalScore);
+                    if (isNaN(finalScore)) finalScore = null;
+                } else if (typeof finalScore !== 'number') {
+                    finalScore = null;
+                }
+                
+                // ✅ إصلاح: تحويل compliantCount و totalItems إلى أرقام
+                let compliantCount = record.compliantCount;
+                if (typeof compliantCount === 'string') compliantCount = parseInt(compliantCount) || 0;
+                let totalItems = record.totalItems;
+                if (typeof totalItems === 'string') totalItems = parseInt(totalItems) || 0;
+                
+                // ✅ إصلاح: إذا لم يوجد finalScore ولكن يوجد compliantCount و totalItems، احسب النسبة
+                if (finalScore === null && compliantCount > 0 && totalItems > 0) {
+                    finalScore = Math.round((compliantCount / totalItems) * 100);
+                }
+                
+                // إنشاء سجل التقييم الأساسي
+                evaluationsMap.set(evalId, {
+                    id: evalId,
+                    contractorId: record.contractorId,
+                    contractorName: record.contractorName,
+                    evaluationDate: record.evaluationDate,
+                    evaluatorName: record.evaluatorName,
+                    projectName: record.projectName,
+                    location: record.location,
+                    generalNotes: record.generalNotes,
+                    compliantCount: compliantCount ?? 0,
+                    totalItems: totalItems ?? 0,
+                    finalScore: finalScore,
+                    finalRating: record.finalRating || '',
+                    isoCode: record.isoCode,
+                    createdAt: record.createdAt,
+                    updatedAt: record.updatedAt,
+                    createdBy: record.createdBy,
+                    updatedBy: record.updatedBy,
+                    items: []
+                });
+            }
+            
+            // إضافة البند إلى المصفوفة
+            const evaluation = evaluationsMap.get(evalId);
+            if (record.criteriaId || record.title) {
+                evaluation.items.push({
+                    criteriaId: record.criteriaId,
+                    title: record.title,
+                    status: record.status,
+                    notes: record.notes
+                });
+            }
+        });
+        
+        const records = Array.from(evaluationsMap.values()).sort((a, b) => {
             const dateA = new Date(a.evaluationDate || a.createdAt || 0);
             const dateB = new Date(b.evaluationDate || b.createdAt || 0);
             return dateB - dateA;
-        }).filter(record => !contractorId || record.contractorId === contractorId);
+        });
 
         if (records.length === 0) {
             return `
@@ -3152,7 +3232,7 @@ const Contractors = {
                                 <td>${Utils.escapeHTML(record.evaluatorName || '')}</td>
                                 <td>${Utils.escapeHTML(record.projectName || record.location || '')}</td>
                                 <td>${record.compliantCount ?? 0}</td>
-                                <td>${record.totalItems ?? (record.items ? record.items.length : 0)}</td>
+                                <td>${record.totalItems ?? (Array.isArray(record.items) ? record.items.length : (record.items ? Object.keys(record.items).length : 0))}</td>
                                 <td>${typeof record.finalScore === 'number' ? record.finalScore.toFixed(0) + '%' : '-'}</td>
                                 <td>
                                     <span class="badge ${record.finalScore >= 90 ? 'badge-success' : record.finalScore >= 75 ? 'badge-info' : record.finalScore >= 60 ? 'badge-warning' : 'badge-danger'}">
@@ -3566,9 +3646,50 @@ const Contractors = {
         return;
     },
 
+    /**
+     * ✅ التأكد من ربط event listeners لأزرار التقييمات
+     * يتم استدعاؤها عند التبديل إلى تبويب التقييمات
+     * ✅ يتم إعادة ربط الـ listeners حتى لو تم إلغاؤها سابقاً
+     */
+    ensureEvaluationsEventListeners() {
+        // ✅ ربط زر إضافة تقييم
+        const addEvaluationBtn = document.getElementById('add-contractor-evaluation-btn');
+        if (addEvaluationBtn && !addEvaluationBtn.hasAttribute('data-listener-attached')) {
+            addEvaluationBtn.setAttribute('data-listener-attached', 'true');
+            addEvaluationBtn.addEventListener('click', () => this.handleAddEvaluationClick());
+        }
+
+        // ✅ ربط زر تعديل بنود التقييم
+        const settingsBtn = document.getElementById('contractor-evaluation-settings-btn');
+        if (settingsBtn && !settingsBtn.hasAttribute('data-listener-attached')) {
+            settingsBtn.setAttribute('data-listener-attached', 'true');
+            settingsBtn.addEventListener('click', () => this.openEvaluationSettings());
+        }
+
+        // ✅ ربط فلتر المقاولين
+        const filterSelect = document.getElementById('contractor-evaluation-filter');
+        if (filterSelect && !filterSelect.hasAttribute('data-listener-attached')) {
+            filterSelect.setAttribute('data-listener-attached', 'true');
+            if (this.currentEvaluationFilter) {
+                filterSelect.value = this.currentEvaluationFilter;
+            }
+            filterSelect.addEventListener('change', (event) => {
+                this.currentEvaluationFilter = event.target.value || '';
+                this.refreshEvaluationsList(this.currentEvaluationFilter);
+            });
+        }
+    },
+
     handleAddEvaluationClick() {
-        const contractors = AppState.appData.contractors || [];
-        if (contractors.length === 0) {
+        // ✅ استخدام نفس المنطق المستخدم في renderEvaluationsSection
+        const approvedOptions = this.getApprovedOptions(true);
+        const legacyContractors = AppState.appData.contractors || [];
+        const filterOptions = approvedOptions.length > 0 ? approvedOptions : legacyContractors.map(contractor => ({
+            id: contractor.id,
+            name: contractor.name || contractor.company || contractor.contractorName || ''
+        }));
+
+        if (filterOptions.length === 0) {
             Notification.warning('لا توجد شركات مقاولين مسجلة. يرجى إضافة مقاول أولاً.');
             return;
         }
@@ -3581,8 +3702,8 @@ const Contractors = {
             return;
         }
 
-        if (contractors.length === 1) {
-            this.showEvaluationForm(contractors[0].id);
+        if (filterOptions.length === 1) {
+            this.showEvaluationForm(filterOptions[0].id);
             return;
         }
 
@@ -3590,8 +3711,18 @@ const Contractors = {
     },
 
     showEvaluationContractorPicker() {
-        const contractors = AppState.appData.contractors || [];
-        if (contractors.length === 0) return;
+        // ✅ استخدام نفس المنطق المستخدم في renderEvaluationsSection
+        const approvedOptions = this.getApprovedOptions(true);
+        const legacyContractors = AppState.appData.contractors || [];
+        const filterOptions = approvedOptions.length > 0 ? approvedOptions : legacyContractors.map(contractor => ({
+            id: contractor.id,
+            name: contractor.name || contractor.company || contractor.contractorName || ''
+        }));
+
+        if (filterOptions.length === 0) {
+            Notification.warning('لا توجد شركات مقاولين مسجلة. يرجى إضافة مقاول أولاً.');
+            return;
+        }
 
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
@@ -3609,8 +3740,8 @@ const Contractors = {
                             <label class="block text-sm font-semibold text-gray-700 mb-2">اختر المقاول</label>
                             <select id="contractor-evaluation-picker-select" class="form-input" required>
                                 <option value="">-- اختر المقاول --</option>
-                                ${contractors.map(contractor => `
-                                    <option value="${contractor.id}">${Utils.escapeHTML(contractor.name || contractor.company || contractor.contractorName || '')}</option>
+                                ${filterOptions.map(contractor => `
+                                    <option value="${contractor.id}">${Utils.escapeHTML(contractor.name || '')}</option>
                                 `).join('')}
                             </select>
                         </div>
@@ -4040,7 +4171,16 @@ const Contractors = {
             return;
         }
 
-        const existingItems = Array.isArray(existing?.items) ? existing.items : [];
+        // ✅ إصلاح: إذا كان existing موجوداً، نحصل على البيانات من الصفوف المنفصلة
+        let evaluationData = existing;
+        if (existing && existing.id) {
+            const fullEvaluation = this.getEvaluationWithItems(existing.id);
+            if (fullEvaluation) {
+                evaluationData = fullEvaluation;
+            }
+        }
+        
+        const existingItems = Array.isArray(evaluationData?.items) ? evaluationData.items : [];
         const existingById = new Map(existingItems.map(item => [(item.criteriaId || item.id || item.title || '').toString(), item]));
 
         const rowsData = criteria.map((criterion) => {
@@ -4055,15 +4195,15 @@ const Contractors = {
 
         const initialSummary = this.calculateEvaluationSummary(rowsData);
 
-        const defaultDate = existing?.evaluationDate
-            ? new Date(existing.evaluationDate).toISOString().slice(0, 10)
+        const defaultDate = evaluationData?.evaluationDate
+            ? new Date(evaluationData.evaluationDate).toISOString().slice(0, 10)
             : new Date().toISOString().slice(0, 10);
-        const evaluatorName = existing?.evaluatorName || AppState.currentUser?.name || '';
-        const projectName = existing?.projectName || '';
-        const location = existing?.location || '';
-        const generalNotes = existing?.generalNotes || existing?.notes || '';
-        // ✅ إصلاح: استخدام contractorNameOverride إذا كان متوفراً، وإلا استخدام القيم الافتراضية مع أولوية existing.contractorName
-        const contractorName = contractorNameOverride || existing?.contractorName || contractor?.name || contractor?.company || contractor?.contractorName || '';
+        const evaluatorName = evaluationData?.evaluatorName || AppState.currentUser?.name || '';
+        const projectName = evaluationData?.projectName || '';
+        const location = evaluationData?.location || '';
+        const generalNotes = evaluationData?.generalNotes || evaluationData?.notes || '';
+        // ✅ إصلاح: استخدام contractorNameOverride إذا كان متوفراً، وإلا استخدام القيم الافتراضية مع أولوية evaluationData.contractorName
+        const contractorName = contractorNameOverride || evaluationData?.contractorName || contractor?.name || contractor?.company || contractor?.contractorName || '';
 
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
@@ -4211,8 +4351,8 @@ const Contractors = {
                 const summary = this.calculateEvaluationSummary(items);
 
                 const record = {
-                    id: existing?.id || Utils.generateId('CTREVAL'),
-                    contractorId: contractor?.id || existing?.contractorId || contractorId,
+                    id: evaluationData?.id || Utils.generateId('CTREVAL'),
+                    contractorId: contractor?.id || evaluationData?.contractorId || contractorId,
                     contractorName,
                     evaluationDate: new Date(evaluationDate).toISOString(),
                     evaluatorName: evaluator,
@@ -4224,10 +4364,10 @@ const Contractors = {
                     totalItems: summary.totalItems ?? 0,
                     finalScore: summary.finalScore,
                     finalRating: summary.finalRating || '',
-                    isoCode: existing?.isoCode || (typeof generateISOCode === 'function' ? generateISOCode('CTREV', AppState.appData.contractorEvaluations) : ''),
-                    createdAt: existing?.createdAt || new Date().toISOString(),
+                    isoCode: evaluationData?.isoCode || (typeof generateISOCode === 'function' ? generateISOCode('CTREV', AppState.appData.contractorEvaluations) : ''),
+                    createdAt: evaluationData?.createdAt || new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
-                    createdBy: existing?.createdBy || AppState.currentUser?.id || '',
+                    createdBy: evaluationData?.createdBy || AppState.currentUser?.id || '',
                     updatedBy: AppState.currentUser?.id || ''
                 };
 
@@ -4239,13 +4379,13 @@ const Contractors = {
                 // التحقق من الصلاحيات - فقط المدير يمكنه اعتماد التقييمات مباشرة
                 const isAdmin = Permissions.isAdmin();
 
-                if (existing) {
+                if (evaluationData) {
                     // التعديل - فقط المدير
                     if (!isAdmin) {
                         Notification.error('ليس لديك صلاحية لتعديل التقييمات. يرجى التواصل مع مدير النظام.');
                         return;
                     }
-                    this.persistEvaluation(record, existing);
+                    this.persistEvaluation(record, evaluationData);
                     Notification.success('تم تحديث تقييم المقاول بنجاح');
                     modal.remove();
                 } else {
@@ -4339,16 +4479,59 @@ const Contractors = {
             AppState.appData.contractorEvaluations = [];
         }
 
+        // ✅ إصلاح: حفظ كل بند كسجل منفصل في الجدول
+        const evaluationId = record.id;
+        const evaluationBaseData = {
+            id: evaluationId,
+            contractorId: record.contractorId,
+            contractorName: record.contractorName,
+            evaluationDate: record.evaluationDate,
+            evaluatorName: record.evaluatorName,
+            projectName: record.projectName || '',
+            location: record.location || '',
+            generalNotes: record.generalNotes || '',
+            compliantCount: record.compliantCount ?? 0,
+            totalItems: record.totalItems ?? 0,
+            finalScore: record.finalScore,
+            finalRating: record.finalRating || '',
+            isoCode: record.isoCode || '',
+            createdAt: record.createdAt || new Date().toISOString(),
+            updatedAt: record.updatedAt || new Date().toISOString(),
+            createdBy: record.createdBy || AppState.currentUser?.id || '',
+            updatedBy: record.updatedBy || AppState.currentUser?.id || ''
+        };
+
+        // ✅ حذف البنود القديمة للتقييم إذا كان تعديل
         if (existing) {
-            const index = AppState.appData.contractorEvaluations.findIndex(item => item.id === existing.id);
-            if (index !== -1) {
-                AppState.appData.contractorEvaluations[index] = record;
-            } else {
-                AppState.appData.contractorEvaluations.push(record);
-            }
-        } else {
-            AppState.appData.contractorEvaluations.push(record);
+            AppState.appData.contractorEvaluations = AppState.appData.contractorEvaluations.filter(
+                item => item.evaluationId !== evaluationId
+            );
         }
+
+        // ✅ حفظ كل بند كسجل منفصل
+        const items = Array.isArray(record.items) ? record.items : [];
+        const now = new Date().toISOString();
+        const userId = AppState.currentUser?.id || '';
+
+        items.forEach((item, index) => {
+            const evaluationRecord = {
+                ...evaluationBaseData,
+                // ✅ إضافة معلومات البند
+                criteriaId: item.criteriaId || '',
+                title: item.title || item.label || '',
+                status: item.status || '',
+                notes: item.notes || '',
+                itemIndex: index + 1,
+                // ✅ الحقول المطلوبة لكل بند
+                createdAt: existing ? (item.createdAt || evaluationBaseData.createdAt) : now,
+                updatedAt: now,
+                createdBy: existing ? (item.createdBy || evaluationBaseData.createdBy) : userId,
+                updatedBy: userId,
+                // ✅ معرف فريد لكل صف
+                rowId: existing && item.rowId ? item.rowId : Utils.generateId('CEVROW')
+            };
+            AppState.appData.contractorEvaluations.push(evaluationRecord);
+        });
 
         // حفظ البيانات باستخدام window.DataManager
         if (typeof window.DataManager !== 'undefined' && window.DataManager.save) {
@@ -4520,14 +4703,52 @@ const Contractors = {
         if (!evaluation) return '';
         const statusLabel = (status) => status === 'compliant' ? 'مطابق' : status === 'non_compliant' ? 'غير مطابق' : '-';
 
-        const itemsRows = (evaluation.items || []).map((item, index) => `
+        // ✅ إصلاح: التأكد من أن items هي مصفوفة ومعالجة البيانات بشكل صحيح
+        let items = [];
+        if (Array.isArray(evaluation.items)) {
+            items = evaluation.items;
+        } else if (evaluation.items && typeof evaluation.items === 'object') {
+            // إذا كان كائن، نحوله إلى مصفوفة
+            items = Object.values(evaluation.items);
+        }
+        
+        // ✅ تصفية البنود الفارغة وإظهار فقط البنود التي لها عنوان أو حالة
+        // نعرض البند إذا كان له عنوان أو إذا كان له حالة (حتى لو العنوان فارغ)
+        items = items.filter(item => {
+            if (!item || typeof item !== 'object') return false;
+            // نعرض البند إذا كان له عنوان أو حالة
+            const hasTitle = item.title || item.label || item.criteriaId;
+            const hasStatus = item.status && (item.status === 'compliant' || item.status === 'non_compliant');
+            return hasTitle || hasStatus;
+        });
+        
+        const itemsRows = items.length > 0 ? items.map((item, index) => {
+            // ✅ محاولة الحصول على العنوان من مصادر متعددة
+            let title = item.title || item.label || '';
+            // إذا لم يكن هناك عنوان، نحاول الحصول عليه من criteriaId أو من معايير التقييم
+            if (!title && item.criteriaId) {
+                const criteria = this.getEvaluationCriteria();
+                const criterion = criteria.find(c => c.id === item.criteriaId);
+                if (criterion) {
+                    title = criterion.label || criterion.title || '';
+                }
+            }
+            // إذا لم يكن هناك عنوان بعد، نستخدم criteriaId كبديل
+            if (!title) {
+                title = item.criteriaId || `بند ${index + 1}`;
+            }
+            
+            const status = item.status || '';
+            const notes = item.notes || '';
+            return `
             <tr>
                 <td>${index + 1}</td>
-                <td>${Utils.escapeHTML(item.title || '')}</td>
-                <td>${statusLabel(item.status)}</td>
-                <td>${Utils.escapeHTML(item.notes || '')}</td>
+                <td>${Utils.escapeHTML(title)}</td>
+                <td>${statusLabel(status)}</td>
+                <td>${Utils.escapeHTML(notes)}</td>
             </tr>
-        `).join('');
+        `;
+        }).join('') : '<tr><td colspan="4" class="text-center text-gray-500 py-4">لا توجد بنود مسجلة</td></tr>';
 
         return `
             <div class="space-y-4">
@@ -4554,7 +4775,7 @@ const Contractors = {
                     </div>
                     <div>
                         <label class="text-sm font-semibold text-gray-600">إجمالي البنود</label>
-                        <p class="text-gray-800">${evaluation.totalItems ?? (evaluation.items ? evaluation.items.length : 0)}</p>
+                        <p class="text-gray-800">${evaluation.totalItems ?? (Array.isArray(evaluation.items) ? evaluation.items.length : (evaluation.items ? Object.keys(evaluation.items).length : 0))}</p>
                     </div>
                     <div>
                         <label class="text-sm font-semibold text-gray-600">نسبة التقييم</label>
@@ -4592,8 +4813,76 @@ const Contractors = {
         `;
     },
 
+    /**
+     * ✅ تجميع بنود التقييم من الصفوف المنفصلة
+     */
+    getEvaluationWithItems(evaluationId) {
+        const allRecords = AppState.appData.contractorEvaluations || [];
+        const evaluationRecords = allRecords.filter(r => (r.id === evaluationId || r.evaluationId === evaluationId));
+        
+        if (evaluationRecords.length === 0) return null;
+        
+        // استخدام أول سجل كأساس
+        const firstRecord = evaluationRecords[0];
+        
+        // ✅ إصلاح: تحويل finalScore إلى رقم إذا كان نصاً
+        let finalScore = firstRecord.finalScore;
+        if (typeof finalScore === 'string' && finalScore !== '') {
+            finalScore = parseFloat(finalScore);
+            if (isNaN(finalScore)) finalScore = null;
+        } else if (typeof finalScore !== 'number') {
+            finalScore = null;
+        }
+        
+        // ✅ إصلاح: تحويل compliantCount و totalItems إلى أرقام
+        let compliantCount = firstRecord.compliantCount;
+        if (typeof compliantCount === 'string') compliantCount = parseInt(compliantCount) || 0;
+        let totalItems = firstRecord.totalItems;
+        if (typeof totalItems === 'string') totalItems = parseInt(totalItems) || 0;
+        
+        // ✅ إصلاح: إذا لم يوجد finalScore ولكن يوجد compliantCount و totalItems، احسب النسبة
+        if (finalScore === null && compliantCount > 0 && totalItems > 0) {
+            finalScore = Math.round((compliantCount / totalItems) * 100);
+        }
+        
+        const evaluation = {
+            id: firstRecord.id || firstRecord.evaluationId,
+            contractorId: firstRecord.contractorId,
+            contractorName: firstRecord.contractorName,
+            evaluationDate: firstRecord.evaluationDate,
+            evaluatorName: firstRecord.evaluatorName,
+            projectName: firstRecord.projectName,
+            location: firstRecord.location,
+            generalNotes: firstRecord.generalNotes,
+            compliantCount: compliantCount ?? 0,
+            totalItems: totalItems ?? 0,
+            finalScore: finalScore,
+            finalRating: firstRecord.finalRating || '',
+            isoCode: firstRecord.isoCode,
+            createdAt: firstRecord.createdAt,
+            updatedAt: firstRecord.updatedAt,
+            createdBy: firstRecord.createdBy,
+            updatedBy: firstRecord.updatedBy,
+            items: []
+        };
+        
+        // تجميع البنود
+        evaluationRecords.forEach(record => {
+            if (record.criteriaId || record.title) {
+                evaluation.items.push({
+                    criteriaId: record.criteriaId,
+                    title: record.title,
+                    status: record.status,
+                    notes: record.notes
+                });
+            }
+        });
+        
+        return evaluation;
+    },
+
     viewEvaluation(evaluationId) {
-        const evaluation = (AppState.appData.contractorEvaluations || []).find(item => item.id === evaluationId);
+        const evaluation = this.getEvaluationWithItems(evaluationId);
         if (!evaluation) {
             Notification.error('السجل المطلوب غير موجود');
             return;
@@ -4633,7 +4922,7 @@ const Contractors = {
     },
 
     exportEvaluationPDF(evaluationId) {
-        const evaluation = (AppState.appData.contractorEvaluations || []).find(item => item.id === evaluationId);
+        const evaluation = this.getEvaluationWithItems(evaluationId);
         if (!evaluation) {
             Notification.error('السجل المطلوب غير موجود');
             return;
@@ -4651,13 +4940,31 @@ const Contractors = {
                     <tr><th>اسم المقيم</th><td>${Utils.escapeHTML(evaluation.evaluatorName || '')}</td></tr>
                     <tr><th>الموقع / المشروع</th><td>${Utils.escapeHTML(evaluation.projectName || evaluation.location || '')}</td></tr>
                     <tr><th>عدد البنود المطابقة</th><td>${evaluation.compliantCount ?? 0}</td></tr>
-                    <tr><th>إجمالي البنود الفعلية</th><td>${evaluation.totalItems ?? (evaluation.items ? evaluation.items.length : 0)}</td></tr>
+                    <tr><th>إجمالي البنود الفعلية</th><td>${evaluation.totalItems ?? (Array.isArray(evaluation.items) ? evaluation.items.length : (evaluation.items ? Object.keys(evaluation.items).length : 0))}</td></tr>
                     <tr><th>نسبة التقييم</th><td>${typeof evaluation.finalScore === 'number' ? evaluation.finalScore.toFixed(0) + '%' : '-'}</td></tr>
                     <tr><th>التقييم النهائي</th><td>${Utils.escapeHTML(evaluation.finalRating || '')}</td></tr>
                 </table>
             `;
 
-            const itemsTable = `
+            // ✅ إصلاح: التأكد من أن items هي مصفوفة ومعالجة البيانات بشكل صحيح
+            let items = [];
+            if (Array.isArray(evaluation.items)) {
+                items = evaluation.items;
+            } else if (evaluation.items && typeof evaluation.items === 'object') {
+                // إذا كان كائن، نحوله إلى مصفوفة
+                items = Object.values(evaluation.items);
+            }
+            
+            // ✅ تصفية البنود الفارغة وإظهار فقط البنود التي لها عنوان أو حالة
+            items = items.filter(item => {
+                if (!item || typeof item !== 'object') return false;
+                // نعرض البند إذا كان له عنوان أو حالة
+                const hasTitle = item.title || item.label || item.criteriaId;
+                const hasStatus = item.status && (item.status === 'compliant' || item.status === 'non_compliant');
+                return hasTitle || hasStatus;
+            });
+            
+            const itemsTable = items.length > 0 ? `
                 <div class="section-title">تفاصيل بنود التقييم</div>
                 <table>
                     <thead>
@@ -4669,17 +4976,36 @@ const Contractors = {
                         </tr>
                     </thead>
                     <tbody>
-                        ${(evaluation.items || []).map((item, index) => `
+                        ${items.map((item, index) => {
+                            // ✅ محاولة الحصول على العنوان من مصادر متعددة
+                            let title = item.title || item.label || '';
+                            // إذا لم يكن هناك عنوان، نحاول الحصول عليه من criteriaId أو من معايير التقييم
+                            if (!title && item.criteriaId) {
+                                const criteria = this.getEvaluationCriteria();
+                                const criterion = criteria.find(c => c.id === item.criteriaId);
+                                if (criterion) {
+                                    title = criterion.label || criterion.title || '';
+                                }
+                            }
+                            // إذا لم يكن هناك عنوان بعد، نستخدم criteriaId كبديل
+                            if (!title) {
+                                title = item.criteriaId || `بند ${index + 1}`;
+                            }
+                            
+                            const status = item.status || '';
+                            const notes = item.notes || '';
+                            return `
                             <tr>
                                 <td>${index + 1}</td>
-                                <td>${Utils.escapeHTML(item.title || '')}</td>
-                                <td>${statusLabel(item.status)}</td>
-                                <td>${Utils.escapeHTML(item.notes || '')}</td>
+                                <td>${Utils.escapeHTML(title)}</td>
+                                <td>${statusLabel(status)}</td>
+                                <td>${Utils.escapeHTML(notes)}</td>
                             </tr>
-                        `).join('')}
+                        `;
+                        }).join('')}
                     </tbody>
                 </table>
-            `;
+            ` : '<div class="section-title">تفاصيل بنود التقييم</div><p class="text-gray-500 text-center py-4">لا توجد بنود مسجلة</p>';
 
             const notesSection = evaluation.generalNotes
                 ? `
@@ -4762,14 +5088,23 @@ const Contractors = {
         }
 
         const collection = AppState.appData.contractorEvaluations || [];
-        const index = collection.findIndex(item => item.id === evaluationId);
-        if (index === -1) {
+        
+        // ✅ إصلاح: البحث عن جميع الصفوف المرتبطة بالتقييم (التقييمات تُخزن كصفوف متعددة)
+        const relatedRecords = collection.filter(item => item.id === evaluationId || item.evaluationId === evaluationId);
+        if (relatedRecords.length === 0) {
             Notification.error('السجل المطلوب غير موجود');
             return;
         }
 
-        const contractorId = collection[index]?.contractorId;
-        collection.splice(index, 1);
+        const contractorId = relatedRecords[0]?.contractorId;
+        
+        // ✅ حذف جميع الصفوف المرتبطة بالتقييم
+        for (let i = collection.length - 1; i >= 0; i--) {
+            if (collection[i].id === evaluationId || collection[i].evaluationId === evaluationId) {
+                collection.splice(i, 1);
+            }
+        }
+        
         // حفظ البيانات باستخدام window.DataManager
         if (typeof window.DataManager !== 'undefined' && window.DataManager.save) {
             window.DataManager.save();
@@ -7293,23 +7628,28 @@ const Contractors = {
             
             const statusBadge = this.getApprovalRequestStatusBadge(request.status);
             const isDeletionRequest = request.requestCategory === 'deletion';
+            const isEvaluationRequest = !isDeletionRequest && request.requestType === 'evaluation';
             let requestType;
             if (isDeletionRequest) {
                 requestType = request.requestType === 'contractor' ? 'حذف مقاول' :
                     request.requestType === 'approved_entity' ? 'حذف معتمد' :
                         request.requestType === 'evaluation' ? 'حذف تقييم' : 'حذف';
+            } else if (isEvaluationRequest) {
+                requestType = 'طلب تقييم';
             } else {
-                requestType = request.requestType === 'contractor' ? 'مقاول' :
-                    request.requestType === 'evaluation' ? 'تقييم' : 'اعتماد';
+                requestType = request.requestType === 'contractor' ? 'اعتماد مقاول' : 'اعتماد مورد';
             }
             const entityName = isDeletionRequest
                 ? (request.entityName || request.companyName || '')
-                : (request.contractorName || request.companyName || '');
+                : isEvaluationRequest
+                    ? (request.contractorName || '')
+                    : (request.companyName || request.contractorName || '');
 
             return `
                                 <tr ${request._isPendingSync ? 'style="opacity: 0.8;"' : ''}>
                                     <td>
                                         ${isDeletionRequest ? '<span class="badge badge-warning">حذف</span> ' : ''}
+                                        ${isEvaluationRequest ? '<span class="badge badge-info">تقييم</span> ' : ''}
                                         ${requestType}
                                     </td>
                                     <td>${Utils.escapeHTML(entityName)}</td>
@@ -8215,6 +8555,88 @@ const Contractors = {
         const isAdmin = Permissions.isAdmin();
         const statusBadge = this.getApprovalRequestStatusBadge(request.status);
         const isDeletionRequest = requestCategory === 'deletion';
+        const isEvaluationRequest = !isDeletionRequest && request.requestType === 'evaluation';
+        const canEdit = isAdmin && !isDeletionRequest && (request.status === 'pending' || request.status === 'under_review');
+
+        // ✅ إصلاح: البحث عن بيانات التقييم في عدة أماكن
+        let evaluationData = null;
+        if (isEvaluationRequest) {
+            // محاولة الحصول على evaluationData من الطلب
+            evaluationData = request.evaluationData;
+            
+            // ✅ تحليل evaluationData إذا كان نصاً (JSON string) - معالجة التشفير المزدوج
+            let parseAttempts = 0;
+            while (evaluationData && typeof evaluationData === 'string' && parseAttempts < 3) {
+                try {
+                    evaluationData = JSON.parse(evaluationData);
+                    parseAttempts++;
+                } catch (error) {
+                    Utils.safeWarn('⚠️ فشل تحليل evaluationData من النص (محاولة ' + parseAttempts + '):', error);
+                    break;
+                }
+            }
+            
+            // ✅ التحقق من أن evaluationData كائن صالح
+            if (evaluationData && typeof evaluationData !== 'object') {
+                Utils.safeWarn('⚠️ evaluationData ليس كائناً صالحاً:', typeof evaluationData);
+                evaluationData = null;
+            }
+            
+            // ✅ إذا لم يوجد evaluationData أو كان فارغاً، استخدام بيانات الطلب مباشرة
+            const hasValidData = evaluationData && (
+                evaluationData.evaluationDate ||
+                evaluationData.evaluatorName ||
+                evaluationData.projectName ||
+                evaluationData.location ||
+                evaluationData.finalScore !== undefined ||
+                (evaluationData.items && evaluationData.items.length > 0)
+            );
+            
+            if (!hasValidData) {
+                Utils.safeLog('📋 evaluationData فارغ أو غير صالح، استخدام بيانات الطلب مباشرة');
+                evaluationData = {
+                    evaluationDate: request.evaluationDate || (evaluationData?.evaluationDate) || null,
+                    evaluatorName: request.evaluatorName || (evaluationData?.evaluatorName) || request.createdByName || '',
+                    projectName: request.projectName || (evaluationData?.projectName) || request.location || '',
+                    location: request.location || (evaluationData?.location) || request.projectName || '',
+                    compliantCount: request.compliantCount ?? (evaluationData?.compliantCount) ?? 0,
+                    totalItems: request.totalItems ?? (evaluationData?.totalItems) ?? 0,
+                    finalScore: request.finalScore ?? (evaluationData?.finalScore) ?? null,
+                    finalRating: request.finalRating || (evaluationData?.finalRating) || '',
+                    generalNotes: request.generalNotes || (evaluationData?.generalNotes) || request.notes || '',
+                    items: request.items || (evaluationData?.items) || [],
+                    id: request.entityId || request.evaluationId || (evaluationData?.id) || null
+                };
+            }
+            
+            // ✅ تحليل items إذا كانت نصاً - معالجة التشفير المزدوج
+            let itemsParseAttempts = 0;
+            while (evaluationData?.items && typeof evaluationData.items === 'string' && itemsParseAttempts < 3) {
+                try {
+                    evaluationData.items = JSON.parse(evaluationData.items);
+                    itemsParseAttempts++;
+                } catch (error) {
+                    Utils.safeWarn('⚠️ فشل تحليل بنود التقييم من النص:', error);
+                    evaluationData.items = [];
+                    break;
+                }
+            }
+            
+            Utils.safeLog('📋 بيانات التقييم المستخرجة:', evaluationData);
+            Utils.safeLog('📋 بيانات الطلب الأصلية:', request);
+        }
+        
+        const evaluationItems = Array.isArray(evaluationData?.items)
+            ? evaluationData.items
+            : (evaluationData?.items && typeof evaluationData.items === 'object')
+                ? Object.values(evaluationData.items)
+                : [];
+        const evaluationScoreRaw = evaluationData?.finalScore;
+        const evaluationScore = typeof evaluationScoreRaw === 'number'
+            ? evaluationScoreRaw
+            : (evaluationScoreRaw !== undefined && evaluationScoreRaw !== null && !isNaN(parseFloat(evaluationScoreRaw)))
+                ? parseFloat(evaluationScoreRaw)
+                : null;
 
         let requestType, entityName;
         if (isDeletionRequest) {
@@ -8222,16 +8644,18 @@ const Contractors = {
                 request.requestType === 'approved_entity' ? 'حذف معتمد' :
                     request.requestType === 'evaluation' ? 'حذف تقييم' : 'حذف';
             entityName = request.entityName || request.companyName || '';
+        } else if (isEvaluationRequest) {
+            requestType = 'طلب تقييم مقاول';
+            entityName = request.contractorName || '';
         } else {
-            requestType = request.requestType === 'contractor' ? 'مقاول' :
-                request.requestType === 'evaluation' ? 'تقييم' : 'مورد';
+            requestType = request.requestType === 'contractor' ? 'اعتماد مقاول' : 'اعتماد مورد';
             entityName = request.companyName || request.contractorName || '';
         }
 
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.innerHTML = `
-            <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-content" style="max-width: 800px;">
                 <div class="modal-header">
                     <h2 class="modal-title">${isDeletionRequest ? 'تفاصيل طلب الحذف' : 'تفاصيل طلب الاعتماد'}</h2>
                     <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
@@ -8239,64 +8663,181 @@ const Contractors = {
                     </button>
                 </div>
                 <div class="modal-body">
-                    <div class="space-y-4">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">نوع الطلب</label>
-                                <p class="text-gray-800">${requestType}</p>
-                            </div>
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">الحالة</label>
-                                <p>${statusBadge}</p>
-                            </div>
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">${isDeletionRequest ? 'اسم العنصر المراد حذفه' : 'اسم الشركة / المقاول'}</label>
-                                <p class="text-gray-800">${Utils.escapeHTML(entityName)}</p>
-                            </div>
-                            ${isDeletionRequest && request.reason ? `
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">سبب طلب الحذف</label>
-                                <p class="text-gray-800">${Utils.escapeHTML(request.reason)}</p>
-                            </div>
-                            ` : ''}
-                            ${!isDeletionRequest ? `
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">نوع الخدمة / النشاط</label>
-                                <p class="text-gray-800">${Utils.escapeHTML(request.serviceType || '')}</p>
-                            </div>
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">رقم السجل التجاري / الترخيص</label>
-                                <p class="text-gray-800">${Utils.escapeHTML(request.licenseNumber || '') || '—'}</p>
-                            </div>
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">الشخص المسؤول</label>
-                                <p class="text-gray-800">${Utils.escapeHTML(request.contactPerson || '') || '—'}</p>
-                            </div>
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">رقم الهاتف</label>
-                                <p class="text-gray-800">${Utils.escapeHTML(request.phone || '') || '—'}</p>
-                            </div>
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">البريد الإلكتروني</label>
-                                <p class="text-gray-800">${Utils.escapeHTML(request.email || '') || '—'}</p>
-                            </div>
-                            ` : ''}
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">تاريخ الإرسال</label>
-                                <p class="text-gray-800">${request.createdAt ? Utils.formatDate(request.createdAt) : '—'}</p>
-                            </div>
-                            <div>
-                                <label class="text-sm font-semibold text-gray-600">أرسل بواسطة</label>
-                                <p class="text-gray-800">${Utils.escapeHTML(request.createdByName || '') || '—'}</p>
+                    ${canEdit ? `
+                        <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-4">
+                            <div class="flex items-center justify-between">
+                                <p class="text-sm text-blue-800">
+                                    <i class="fas fa-info-circle ml-2"></i>
+                                    يمكنك تعديل بيانات الطلب قبل الموافقة عليه
+                                </p>
+                                <button id="toggle-edit-mode-btn" class="btn-sm btn-secondary" onclick="Contractors.toggleEditMode()">
+                                    <i class="fas fa-edit ml-1"></i>
+                                    تفعيل التعديل
+                                </button>
                             </div>
                         </div>
-                        ${!isDeletionRequest && request.notes ? `
-                            <div class="bg-gray-50 border border-gray-200 rounded p-3">
-                                <label class="text-sm font-semibold text-gray-600 block mb-2">ملاحظات</label>
-                                <p class="text-gray-700 whitespace-pre-line">${Utils.escapeHTML(request.notes)}</p>
+                    ` : ''}
+                    <form id="request-details-form">
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">نوع الطلب</label>
+                                    <p class="text-gray-800">${requestType}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">الحالة</label>
+                                    <p>${statusBadge}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">${isDeletionRequest ? 'اسم العنصر المراد حذفه' : isEvaluationRequest ? 'اسم المقاول' : 'اسم الشركة / المقاول'}</label>
+                                    ${!isEvaluationRequest ? `
+                                    <input type="text" id="edit-companyName" class="form-input edit-field" disabled value="${Utils.escapeHTML(entityName)}" style="display: none;" />
+                                    <p id="view-companyName" class="text-gray-800 view-field" style="display: block;">${Utils.escapeHTML(entityName)}</p>
+                                    ` : canEdit ? `
+                                    <input type="text" id="edit-companyName" class="form-input edit-field" value="${Utils.escapeHTML(entityName)}" style="display: none;" />
+                                    <p id="view-companyName" class="text-gray-800 view-field" style="display: block;">${Utils.escapeHTML(entityName)}</p>
+                                    ` : `
+                                    <p class="text-gray-800">${Utils.escapeHTML(entityName)}</p>
+                                    `}
+                                </div>
+                                ${isEvaluationRequest && evaluationData ? `
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">تاريخ التقييم</label>
+                                    <input type="date" id="edit-evaluationDate" class="form-input edit-field" disabled value="${evaluationData.evaluationDate ? (typeof evaluationData.evaluationDate === 'string' ? evaluationData.evaluationDate.slice(0, 10) : new Date(evaluationData.evaluationDate).toISOString().slice(0, 10)) : ''}" style="display: none;" />
+                                    <p id="view-evaluationDate" class="text-gray-800 view-field" style="display: block;">${evaluationData.evaluationDate ? Utils.formatDate(evaluationData.evaluationDate) : '—'}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">اسم المقيّم</label>
+                                    <input type="text" id="edit-evaluatorName" class="form-input edit-field" disabled value="${Utils.escapeHTML(evaluationData.evaluatorName || '')}" style="display: none;" />
+                                    <p id="view-evaluatorName" class="text-gray-800 view-field" style="display: block;">${Utils.escapeHTML(evaluationData.evaluatorName || '') || '—'}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">الموقع / المشروع</label>
+                                    <input type="text" id="edit-projectName" class="form-input edit-field" disabled value="${Utils.escapeHTML(evaluationData.projectName || evaluationData.location || '')}" style="display: none;" />
+                                    <p id="view-projectName" class="text-gray-800 view-field" style="display: block;">${Utils.escapeHTML(evaluationData.projectName || evaluationData.location || '') || '—'}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">عدد البنود المطابقة</label>
+                                    <p class="text-gray-800">${evaluationData.compliantCount ?? 0} من ${evaluationData.totalItems ?? evaluationItems.length ?? 0}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">نسبة التقييم</label>
+                                    <p class="text-gray-800 font-bold ${evaluationScore >= 90 ? 'text-green-600' : evaluationScore >= 75 ? 'text-blue-600' : evaluationScore >= 60 ? 'text-yellow-600' : evaluationScore === null ? 'text-gray-500' : 'text-red-600'}">${typeof evaluationScore === 'number' ? evaluationScore.toFixed(0) + '%' : '—'}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">التقييم النهائي</label>
+                                    <span class="badge ${evaluationScore >= 90 ? 'badge-success' : evaluationScore >= 75 ? 'badge-info' : evaluationScore >= 60 ? 'badge-warning' : evaluationScore === null ? 'badge-secondary' : 'badge-danger'}">${Utils.escapeHTML(evaluationData.finalRating || '')}</span>
+                                </div>
+                                ` : ''}
+                                ${isDeletionRequest && request.reason ? `
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">سبب طلب الحذف</label>
+                                    <p class="text-gray-800">${Utils.escapeHTML(request.reason)}</p>
+                                </div>
+                                ` : ''}
+                                ${!isDeletionRequest && !isEvaluationRequest ? `
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">نوع الخدمة / النشاط</label>
+                                    <input type="text" id="edit-serviceType" class="form-input edit-field" disabled value="${Utils.escapeHTML(request.serviceType || '')}" style="display: none;" />
+                                    <p id="view-serviceType" class="text-gray-800 view-field" style="display: block;">${Utils.escapeHTML(request.serviceType || '')}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">رقم السجل التجاري / الترخيص</label>
+                                    <input type="text" id="edit-licenseNumber" class="form-input edit-field" disabled value="${Utils.escapeHTML(request.licenseNumber || '')}" style="display: none;" />
+                                    <p id="view-licenseNumber" class="text-gray-800 view-field" style="display: block;">${Utils.escapeHTML(request.licenseNumber || '') || '—'}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">الشخص المسؤول</label>
+                                    <input type="text" id="edit-contactPerson" class="form-input edit-field" disabled value="${Utils.escapeHTML(request.contactPerson || '')}" style="display: none;" />
+                                    <p id="view-contactPerson" class="text-gray-800 view-field" style="display: block;">${Utils.escapeHTML(request.contactPerson || '') || '—'}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">رقم الهاتف</label>
+                                    <input type="text" id="edit-phone" class="form-input edit-field" disabled value="${Utils.escapeHTML(request.phone || '')}" style="display: none;" />
+                                    <p id="view-phone" class="text-gray-800 view-field" style="display: block;">${Utils.escapeHTML(request.phone || '') || '—'}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">البريد الإلكتروني</label>
+                                    <input type="email" id="edit-email" class="form-input edit-field" disabled value="${Utils.escapeHTML(request.email || '')}" style="display: none;" />
+                                    <p id="view-email" class="text-gray-800 view-field" style="display: block;">${Utils.escapeHTML(request.email || '') || '—'}</p>
+                                </div>
+                                ` : ''}
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">تاريخ الإرسال</label>
+                                    <p class="text-gray-800">${request.createdAt ? Utils.formatDate(request.createdAt) : '—'}</p>
+                                </div>
+                                <div>
+                                    <label class="text-sm font-semibold text-gray-600">أرسل بواسطة</label>
+                                    <p class="text-gray-800">${Utils.escapeHTML(request.createdByName || '') || '—'}</p>
+                                </div>
                             </div>
-                        ` : ''}
-                        ${!isDeletionRequest && request.attachments && request.attachments.length > 0 ? `
+                            ${isEvaluationRequest && evaluationItems.length > 0 ? `
+                                <div class="bg-gray-50 border border-gray-200 rounded p-3">
+                                    <label class="text-sm font-semibold text-gray-600 block mb-3">
+                                        <i class="fas fa-clipboard-list ml-2"></i>
+                                        تفاصيل بنود التقييم (${evaluationItems.length} بند)
+                                    </label>
+                                    <div class="overflow-x-auto">
+                                        <table class="min-w-full divide-y divide-gray-200">
+                                            <thead class="bg-gray-100">
+                                                <tr>
+                                                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                                                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">البند</th>
+                                                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الحالة</th>
+                                                    <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الملاحظات</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="bg-white divide-y divide-gray-200">
+                                                ${evaluationItems.map((item, idx) => {
+                                                    const statusLabel = item.status === 'compliant' ? 'مطابق' : item.status === 'non_compliant' ? 'غير مطابق' : '—';
+                                                    const statusClass = item.status === 'compliant' ? 'text-green-600' : item.status === 'non_compliant' ? 'text-red-600' : 'text-gray-500';
+                                                    const statusIcon = item.status === 'compliant' ? 'fa-check-circle' : item.status === 'non_compliant' ? 'fa-times-circle' : 'fa-minus-circle';
+                                                    return `
+                                                    <tr>
+                                                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-700">${idx + 1}</td>
+                                                        <td class="px-3 py-2 text-sm text-gray-700">${Utils.escapeHTML(item.title || item.label || '')}</td>
+                                                        <td class="px-3 py-2 whitespace-nowrap text-sm ${statusClass}">
+                                                            <i class="fas ${statusIcon} ml-1"></i>
+                                                            ${statusLabel}
+                                                        </td>
+                                                        <td class="px-3 py-2 text-sm text-gray-600">${Utils.escapeHTML(item.notes || '—')}</td>
+                                                    </tr>
+                                                    `;
+                                                }).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            ` : ''}
+                            ${isEvaluationRequest && evaluationData ? `
+                                <div class="bg-blue-50 border border-blue-200 rounded p-3">
+                                    <label class="text-sm font-semibold text-blue-800 block mb-2">الملاحظات العامة</label>
+                                    <textarea id="edit-generalNotes" class="form-input edit-field" disabled rows="3" style="display: none;">${Utils.escapeHTML(evaluationData.generalNotes || '')}</textarea>
+                                    <p id="view-generalNotes" class="text-blue-700 whitespace-pre-line view-field" style="display: block;">${Utils.escapeHTML(evaluationData.generalNotes || '') || '—'}</p>
+                                </div>
+                            ` : ''}
+                            ${!isDeletionRequest && !isEvaluationRequest && request.notes ? `
+                                <div class="bg-gray-50 border border-gray-200 rounded p-3">
+                                    <label class="text-sm font-semibold text-gray-600 block mb-2">ملاحظات</label>
+                                    <textarea id="edit-notes" class="form-input edit-field" disabled rows="3" style="display: none;">${Utils.escapeHTML(request.notes)}</textarea>
+                                    <p id="view-notes" class="text-gray-700 whitespace-pre-line view-field" style="display: block;">${Utils.escapeHTML(request.notes)}</p>
+                                </div>
+                            ` : ''}
+                            ${canEdit ? `
+                                <div id="save-changes-section" class="border-t pt-4" style="display: none;">
+                                    <button type="button" id="save-changes-btn" class="btn-primary">
+                                        <i class="fas fa-save ml-2"></i>
+                                        حفظ التعديلات
+                                    </button>
+                                    <button type="button" class="btn-secondary" onclick="Contractors.toggleEditMode()">
+                                        <i class="fas fa-times ml-2"></i>
+                                        إلغاء
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </form>
+                    ${!isDeletionRequest && request.attachments && request.attachments.length > 0 ? `
                             <div class="bg-blue-50 border border-blue-200 rounded p-3">
                                 <label class="text-sm font-semibold text-blue-800 block mb-2">
                                     <i class="fas fa-paperclip ml-2"></i>
@@ -8361,9 +8902,13 @@ const Contractors = {
                             </div>
                         ` : ''}
                     </div>
-                </div>
-                <div class="modal-footer">
+                <div class="modal-footer" style="margin-top: auto; flex-shrink: 0; width: 100%;">
                     <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">إغلاق</button>
+                    ${isEvaluationRequest && evaluationData?.id ? `
+                        <button class="btn-info" onclick="Contractors.viewEvaluation('${evaluationData.id}'); this.closest('.modal-overlay').remove();">
+                            <i class="fas fa-clipboard-check ml-2"></i>عرض التقييم كاملاً
+                        </button>
+                    ` : ''}
                     ${isAdmin && (request.status === 'pending' || request.status === 'under_review') ? `
                         <button class="btn-success" onclick="Contractors.approveRequest('${request.id}', '${requestCategory}'); this.closest('.modal-overlay').remove();">
                             <i class="fas fa-check ml-2"></i>اعتماد
@@ -8377,9 +8922,183 @@ const Contractors = {
         `;
 
         document.body.appendChild(modal);
+        
+        // ✅ إضافة event listener لزر حفظ التعديلات
+        const saveChangesBtn = modal.querySelector('#save-changes-btn');
+        if (saveChangesBtn) {
+            saveChangesBtn.addEventListener('click', async () => {
+                await this.saveRequestChanges(requestId, requestCategory);
+            });
+        }
+        
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.remove();
         });
+    },
+
+    /**
+     * ✅ تبديل وضع التعديل
+     */
+    toggleEditMode() {
+        const editFields = document.querySelectorAll('.edit-field');
+        const viewFields = document.querySelectorAll('.view-field');
+        const saveSection = document.getElementById('save-changes-section');
+        const toggleBtn = document.getElementById('toggle-edit-mode-btn');
+        
+        if (!editFields.length) return;
+        
+        const isEditMode = !editFields[0].disabled;
+        
+        editFields.forEach(field => {
+            field.disabled = isEditMode;
+            field.style.display = isEditMode ? 'none' : 'block';
+        });
+        
+        viewFields.forEach(field => {
+            field.style.display = isEditMode ? 'block' : 'none';
+        });
+        
+        if (saveSection) {
+            saveSection.style.display = isEditMode ? 'none' : 'block';
+        }
+        
+        if (toggleBtn) {
+            if (isEditMode) {
+                toggleBtn.innerHTML = '<i class="fas fa-edit ml-1"></i> تفعيل التعديل';
+            } else {
+                toggleBtn.innerHTML = '<i class="fas fa-eye ml-1"></i> إلغاء التعديل';
+            }
+        }
+    },
+
+    /**
+     * ✅ حفظ التعديلات على الطلب
+     */
+    async saveRequestChanges(requestId, requestCategory = 'approval') {
+        if (!Permissions.isAdmin()) {
+            Notification.error('ليس لديك صلاحية لتعديل الطلبات');
+            return;
+        }
+        
+        Loading.show();
+        
+        try {
+            let request;
+            if (requestCategory === 'deletion') {
+                request = (AppState.appData.contractorDeletionRequests || []).find(r => r.id === requestId);
+            } else {
+                request = (AppState.appData.contractorApprovalRequests || []).find(r => r.id === requestId);
+            }
+            
+            if (!request) {
+                throw new Error('الطلب غير موجود');
+            }
+            
+            const isEvaluationRequest = request.requestType === 'evaluation';
+            let updateData;
+            
+            if (isEvaluationRequest) {
+                const contractorName = document.getElementById('edit-companyName')?.value?.trim() ?? '';
+                const evaluationDate = document.getElementById('edit-evaluationDate')?.value?.trim() || null;
+                const evaluatorName = document.getElementById('edit-evaluatorName')?.value?.trim() ?? '';
+                const projectName = document.getElementById('edit-projectName')?.value?.trim() ?? '';
+                const generalNotes = document.getElementById('edit-generalNotes')?.value?.trim() ?? '';
+                
+                let evaluationData = request.evaluationData;
+                if (typeof evaluationData === 'string') {
+                    try { evaluationData = JSON.parse(evaluationData); } catch (e) { evaluationData = {}; }
+                }
+                evaluationData = evaluationData || {};
+                
+                evaluationData.evaluationDate = evaluationDate ? new Date(evaluationDate).toISOString() : (evaluationData.evaluationDate || null);
+                evaluationData.evaluatorName = evaluatorName;
+                evaluationData.projectName = projectName;
+                evaluationData.location = projectName;
+                evaluationData.generalNotes = generalNotes;
+                
+                request.contractorName = contractorName;
+                request.evaluationData = evaluationData;
+                request.updatedAt = new Date().toISOString();
+                request.updatedBy = AppState.currentUser?.id || '';
+                request.updatedByName = AppState.currentUser?.name || '';
+                
+                updateData = {
+                    contractorName,
+                    evaluationData,
+                    updatedAt: request.updatedAt,
+                    updatedBy: request.updatedBy,
+                    updatedByName: request.updatedByName
+                };
+            } else {
+                const companyName = document.getElementById('edit-companyName')?.value?.trim();
+                const serviceType = document.getElementById('edit-serviceType')?.value?.trim();
+                const licenseNumber = document.getElementById('edit-licenseNumber')?.value?.trim();
+                const contactPerson = document.getElementById('edit-contactPerson')?.value?.trim();
+                const phone = document.getElementById('edit-phone')?.value?.trim();
+                const email = document.getElementById('edit-email')?.value?.trim();
+                const notes = document.getElementById('edit-notes')?.value?.trim();
+                
+                if (!companyName) {
+                    Notification.error('يجب إدخال اسم الشركة/المقاول');
+                    Loading.hide();
+                    return;
+                }
+                
+                request.companyName = companyName;
+                if (serviceType !== undefined) request.serviceType = serviceType;
+                if (licenseNumber !== undefined) request.licenseNumber = licenseNumber;
+                if (contactPerson !== undefined) request.contactPerson = contactPerson;
+                if (phone !== undefined) request.phone = phone;
+                if (email !== undefined) request.email = email;
+                if (notes !== undefined) request.notes = notes;
+                request.updatedAt = new Date().toISOString();
+                request.updatedBy = AppState.currentUser?.id || '';
+                request.updatedByName = AppState.currentUser?.name || '';
+                
+                updateData = {
+                    companyName,
+                    serviceType,
+                    licenseNumber,
+                    contactPerson,
+                    phone,
+                    email,
+                    notes,
+                    updatedAt: request.updatedAt,
+                    updatedBy: request.updatedBy,
+                    updatedByName: request.updatedByName
+                };
+            }
+            
+            if (typeof window.DataManager !== 'undefined' && window.DataManager.save) {
+                window.DataManager.save();
+            }
+            
+            const action = requestCategory === 'deletion' 
+                ? 'updateContractorDeletionRequest' 
+                : 'updateContractorApprovalRequest';
+                
+            const result = await GoogleIntegration.sendRequest({
+                action: action,
+                data: {
+                    requestId: requestId,
+                    updateData: updateData
+                }
+            });
+            
+            if (result && result.success) {
+                Notification.success('تم حفظ التعديلات بنجاح');
+                const modal = document.querySelector('.modal-overlay');
+                if (modal) modal.remove();
+                this.refreshApprovalRequestsSection();
+            } else {
+                throw new Error(result?.message || 'فشل حفظ التعديلات');
+            }
+        } catch (error) {
+            Utils.safeError('خطأ في حفظ التعديلات:', error);
+            Notification.error('حدث خطأ أثناء حفظ التعديلات: ' + error.message);
+        } finally {
+            Loading.hide();
+        }
     },
 
     /**

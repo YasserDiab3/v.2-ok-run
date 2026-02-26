@@ -5816,6 +5816,8 @@ const Training = {
         this.ensureData();
         try {
             Loading.show();
+            // ✅ تعريف isAdmin في بداية الدالة
+            const isAdmin = this.isCurrentUserAdmin();
             const trainings = AppState.appData.training || [];
             const filteredTrainings = this.filterTrainingsForReport(trainings, filters);
 
@@ -5853,7 +5855,6 @@ const Training = {
                         </div>
                     </div>
                 </div>
-                ${isAdmin ? this.renderFormSettingsCard() : ''}
                 
                 <div style="margin-bottom: 24px;">
                     <h2 style="font-size: 20px; margin-bottom: 12px;">جدول البرامج التدريبية</h2>

@@ -24,6 +24,19 @@ const PTW = {
         return keywords.some(keyword => role && role.toLowerCase().includes(keyword.toLowerCase()));
     },
 
+    // تحديث أرقام صفوف الاعتمادات
+    updateApprovalNumbers(listId) {
+        const tbody = document.getElementById(listId);
+        if (!tbody) return;
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach((row, idx) => {
+            const numCell = row.querySelector('td:first-child');
+            if (numCell) {
+                numCell.textContent = idx + 1;
+            }
+        });
+    },
+
     normalizeApprovals(approvals = []) {
         if (!Array.isArray(approvals) || approvals.length === 0) {
             return this.getDefaultApprovals();
@@ -5552,12 +5565,57 @@ const PTW = {
         // توليد رقم مسلسل تلقائي إذا كان جديد (سيتم إعادة حسابه عند الحفظ)
         const sequentialNumber = existingEntry?.sequentialNumber || this.generateRegistrySequentialNumber();
 
+        // الحصول على الجهات المعتمدة إن وجدت
+        const approvedEntities = this.contractors || [];
+        const hasApprovedEntities = approvedEntities && approvedEntities.length > 0;
+        const authorizedPartyValue = existingEntry?.authorizedParty || '';
+
         const modal = document.createElement('div');
         modal.className = 'modal-overlay';
         modal.style.cssText = 'display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 10000; align-items: center; justify-content: center;';
         modal.innerHTML = `
             <style>
-                .permit-section {
+                /* أنماط المسطرة الجانبية */
+                #manual-permit-modal-body {
+                    scrollbar-width: auto;
+                    scrollbar-color: #2196F3 #e3f2fd;
+                }
+                #manual-permit-modal-body::-webkit-scrollbar {
+                    width: 14px;
+                }
+                #manual-permit-modal-body::-webkit-scrollbar-track {
+                    background: linear-gradient(180deg, #e3f2fd 0%, #bbdefb 100%);
+                    border-radius: 10px;
+                    border: 2px solid #90caf9;
+                }
+                #manual-permit-modal-body::-webkit-scrollbar-thumb {
+                    background: linear-gradient(180deg, #1976D2 0%, #1565C0 50%, #0D47A1 100%);
+                    border-radius: 10px;
+                    border: 2px solid #e3f2fd;
+                    box-shadow: inset 0 0 6px rgba(0,0,0,0.3);
+                }
+                #manual-permit-modal-body::-webkit-scrollbar-thumb:hover {
+                    background: linear-gradient(180deg, #2196F3 0%, #1976D2 50%, #1565C0 100%);
+                }
+                #manual-permit-modal-body::-webkit-scrollbar-thumb:active {
+                    background: linear-gradient(180deg, #0D47A1 0%, #1565C0 100%);
+                }
+                #manual-permit-modal-body::-webkit-scrollbar-button:single-button {
+                    display: block;
+                    height: 16px;
+                    background-color: #1976D2;
+                    border-radius: 5px;
+                }
+                #manual-permit-modal-body::-webkit-scrollbar-button:single-button:vertical:decrement {
+                    background: linear-gradient(180deg, #1976D2, #1565C0);
+                    border-radius: 5px 5px 0 0;
+                }
+                #manual-permit-modal-body::-webkit-scrollbar-button:single-button:vertical:increment {
+                    background: linear-gradient(180deg, #1565C0, #1976D2);
+                    border-radius: 0 0 5px 5px;
+                }
+                
+                .ptw-manual-form-section {
                     border-radius: 12px;
                     padding: 24px;
                     margin-bottom: 24px;
@@ -5565,11 +5623,11 @@ const PTW = {
                     border: 2px solid;
                     transition: all 0.3s ease;
                 }
-                .permit-section:hover {
+                .ptw-manual-form-section:hover {
                     box-shadow: 0 4px 12px rgba(0,0,0,0.12);
                     transform: translateY(-2px);
                 }
-                .permit-section h3 {
+                .ptw-manual-form-section h3 {
                     font-size: 1.25rem;
                     font-weight: 700;
                     margin-bottom: 20px;
@@ -5579,289 +5637,570 @@ const PTW = {
                     align-items: center;
                     gap: 12px;
                 }
-                .permit-section h3 i {
+                .ptw-manual-form-section h3 i {
                     font-size: 1.5rem;
                     padding: 10px;
                     border-radius: 10px;
                     background: rgba(255,255,255,0.3);
                 }
-                .section-1 { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-color: #2196F3; }
-                .section-1 h3 { color: #1565C0; border-color: #2196F3; }
-                .section-1 h3 i { color: #1976D2; background: rgba(33, 150, 243, 0.1); }
+                .manual-section-1 { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-color: #2196F3; }
+                .manual-section-1 h3 { color: #1565C0; border-color: #2196F3; }
+                .manual-section-1 h3 i { color: #1976D2; background: rgba(33, 150, 243, 0.1); }
                 
-                .section-2 { background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-color: #9C27B0; }
-                .section-2 h3 { color: #6A1B9A; border-color: #9C27B0; }
-                .section-2 h3 i { color: #7B1FA2; background: rgba(156, 39, 176, 0.1); }
+                .manual-section-2 { background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); border-color: #009688; }
+                .manual-section-2 h3 { color: #00695C; border-color: #009688; }
+                .manual-section-2 h3 i { color: #00796B; background: rgba(0, 150, 136, 0.1); }
                 
-                .section-3 { background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-color: #FF9800; }
-                .section-3 h3 { color: #E65100; border-color: #FF9800; }
-                .section-3 h3 i { color: #F57C00; background: rgba(255, 152, 0, 0.1); }
+                .manual-section-3 { background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-color: #9C27B0; }
+                .manual-section-3 h3 { color: #6A1B9A; border-color: #9C27B0; }
+                .manual-section-3 h3 i { color: #7B1FA2; background: rgba(156, 39, 176, 0.1); }
                 
-                .section-4 { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-color: #4CAF50; }
-                .section-4 h3 { color: #2E7D32; border-color: #4CAF50; }
-                .section-4 h3 i { color: #388E3C; background: rgba(76, 175, 80, 0.1); }
+                .manual-section-4 { background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-color: #FF9800; }
+                .manual-section-4 h3 { color: #E65100; border-color: #FF9800; }
+                .manual-section-4 h3 i { color: #F57C00; background: rgba(255, 152, 0, 0.1); }
                 
-                .section-5 { background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%); border-color: #E91E63; }
-                .section-5 h3 { color: #AD1457; border-color: #E91E63; }
-                .section-5 h3 i { color: #C2185B; background: rgba(233, 30, 99, 0.1); }
+                .manual-section-5 { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-color: #4CAF50; }
+                .manual-section-5 h3 { color: #2E7D32; border-color: #4CAF50; }
+                .manual-section-5 h3 i { color: #388E3C; background: rgba(76, 175, 80, 0.1); }
+                
+                .manual-section-6 { background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%); border-color: #E91E63; }
+                .manual-section-6 h3 { color: #AD1457; border-color: #E91E63; }
+                .manual-section-6 h3 i { color: #C2185B; background: rgba(233, 30, 99, 0.1); }
+                
+                .manual-section-7 { background: linear-gradient(135deg, #efebe9 0%, #d7ccc8 100%); border-color: #795548; }
+                .manual-section-7 h3 { color: #4E342E; border-color: #795548; }
+                .manual-section-7 h3 i { color: #5D4037; background: rgba(121, 85, 72, 0.1); }
+                
+                .manual-section-8 { background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%); border-color: #9e9e9e; }
+                .manual-section-8 h3 { color: #424242; border-color: #9e9e9e; }
+                .manual-section-8 h3 i { color: #616161; background: rgba(158, 158, 158, 0.1); }
+                
+                .manual-section-9 { background: linear-gradient(135deg, #e1f5fe 0%, #b3e5fc 100%); border-color: #03a9f4; }
+                .manual-section-9 h3 { color: #0277bd; border-color: #03a9f4; }
+                .manual-section-9 h3 i { color: #0288d1; background: rgba(3, 169, 244, 0.1); }
+                
+                .manual-section-10 { background: linear-gradient(135deg, #ede7f6 0%, #d1c4e9 100%); border-color: #673ab7; }
+                .manual-section-10 h3 { color: #4527a0; border-color: #673ab7; }
+                .manual-section-10 h3 i { color: #512da8; background: rgba(103, 58, 183, 0.1); }
+
+                .manual-permit-type-card {
+                    display: flex;
+                    align-items: center;
+                    padding: 16px;
+                    background: white;
+                    border-radius: 12px;
+                    border: 2px solid #e0e0e0;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+                .manual-permit-type-card:hover {
+                    border-color: #9C27B0;
+                    background: #f3e5f5;
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(156, 39, 176, 0.2);
+                }
+                .manual-permit-type-card.selected {
+                    border-color: #9C27B0;
+                    background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+                    box-shadow: 0 4px 12px rgba(156, 39, 176, 0.3);
+                }
+                .manual-permit-type-card input[type="checkbox"] {
+                    width: 20px;
+                    height: 20px;
+                    margin-left: 12px;
+                    accent-color: #9C27B0;
+                }
+                .manual-permit-type-card .type-icon {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 10px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-left: 12px;
+                    font-size: 1.2rem;
+                }
+                .manual-permit-type-card .type-name {
+                    font-weight: 600;
+                    color: #333;
+                }
             </style>
-            <div class="modal-content" style="max-width: 1500px; width: 98%; max-height: 95vh; overflow-y: auto; padding: 0;">
-                <div class="modal-header modal-header-centered" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px 30px;">
-                    <h2 class="modal-title" style="font-size: 1.75rem; font-weight: 700; color: white;">
-                        <i class="fas fa-file-alt ml-2"></i>
-                        ${isEdit ? 'تعديل تصريح عمل' : 'إصدار تصريح عمل جديد'} – Permit to Work
-                    </h2>
-                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 1.5rem;">
+            <div class="modal-content" style="max-width: 1400px; width: 98%; max-height: 95vh; overflow-y: auto; padding: 0; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+                <!-- رأس النموذج -->
+                <div class="modal-header" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-file-signature" style="font-size: 1.5rem;"></i>
+                        </div>
+                        <div>
+                            <h2 style="font-size: 1.5rem; font-weight: 700; margin: 0; color: white;">
+                                ${isEdit ? 'تعديل تصريح عمل' : 'إصدار تصريح عمل يدوي'} – Manual Permit Entry
+                            </h2>
+                            <p style="font-size: 0.875rem; opacity: 0.8; margin: 4px 0 0 0;">
+                                <i class="fas fa-info-circle ml-1"></i>
+                                تسجيل تصريح عمل مباشر بدون دورة موافقات
+                            </p>
+                        </div>
+                    </div>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="color: white; font-size: 1.5rem; background: rgba(255,255,255,0.1); border: none; width: 44px; height: 44px; border-radius: 10px; cursor: pointer; transition: all 0.3s;">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                <div class="modal-body" style="padding: 30px; max-height: calc(95vh - 180px); overflow-y: auto; background: #f5f7fa;">
-                    <form id="manual-permit-form">
-                        <!-- 1) المعلومات الأساسية -->
-                        <div class="permit-section section-1">
-                            <h3>
-                                <i class="fas fa-info-circle"></i>
-                                <span>1) المعلومات الأساسية</span>
-                            </h3>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                        <i class="fas fa-hashtag ml-2 text-blue-600"></i>
-                                        رقم المسلسل *
-                                    </label>
-                                    <input type="text" id="manual-permit-sequential" class="form-input" 
-                                        value="${sequentialNumber}" readonly 
-                                        style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 50%); font-weight: 700; border: 2px solid #1976D2; color: #0D47A1;">
-                                    <small class="text-gray-500 mt-1 block">يتم توليد الرقم تلقائياً</small>
+
+                <!-- نص الإعلان/التنبيه - مشابه لنموذج إصدار تصريح العمل -->
+                <div style="margin: 24px 24px 0 24px; padding: 0;">
+                    <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 50%, #e1bee7 100%); border-right: 4px solid #2196F3; border-left: 4px solid #2196F3; border-radius: 12px 12px 0 0; padding: 20px; position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: linear-gradient(90deg, #2196F3, #673ab7, #2196F3);"></div>
+                        <div style="text-align: center; padding: 12px; background: linear-gradient(135deg, #fff 0%, #f5f5f5 100%); border-radius: 8px; border: 2px solid #bbdefb;">
+                            <p style="margin: 0; font-size: 15px; line-height: 2.2; color: #1e3a5f; font-weight: 500; letter-spacing: 0.3px;">
+                                تم إصدار هذا التصريح فقط للعمل الذي تم وصفه أدناه<br>
+                                ولا يجوز بأي حال من الأحوال استخدامه لأي عمل آخر لم يتم وصفه<br>
+                                وعليه فإنه يجب الالتزام بمدة صلاحية التصريح للعمل المذكور أدناه وفى الموقع المصرح للعمل فيه فقط.
+                            </p>
+                        </div>
+                        <div style="margin-top: 12px; padding: 10px 16px; background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border: 2px solid #ffc107; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <i class="fas fa-hand-paper" style="color: #f57c00; font-size: 1.2rem;"></i>
+                                <span style="color: #e65100; font-weight: 600; font-size: 0.9rem;">تصريح يدوي - يتم تسجيله مباشرة بدون دورة موافقات إلكترونية</span>
+                            </div>
+                        </div>
+                        <!-- الرقم المسلسل للتصريح -->
+                        <div style="margin-top: 12px; display: flex; justify-content: center;">
+                            <div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 12px 32px; border-radius: 8px; display: inline-flex; align-items: center; gap: 12px; box-shadow: 0 4px 15px rgba(30, 60, 114, 0.3);">
+                                <i class="fas fa-hashtag" style="font-size: 1.3rem; opacity: 0.9;"></i>
+                                <div style="text-align: center;">
+                                    <span style="font-size: 0.75rem; opacity: 0.85; display: block;">رقم التصريح / Permit No.</span>
+                                    <span id="manual-permit-display-number" style="font-size: 1.5rem; font-weight: 700; letter-spacing: 2px; font-family: 'Courier New', monospace;">${String(sequentialNumber).padStart(4, '0')}</span>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-body" id="manual-permit-modal-body" style="padding: 24px; padding-top: 0; max-height: calc(95vh - 280px); overflow-y: scroll; background: #f8fafc; direction: ltr;">
+                    <form id="manual-permit-form" style="direction: rtl;">
+                        
+                        <!-- القسم الأول: بيانات التصريح الأساسية -->
+                        <div class="ptw-manual-form-section manual-section-1" style="margin-top: 0; border-top-left-radius: 0; border-top-right-radius: 0;">
+                            <h3><i class="fas fa-info-circle"></i><span>القسم الأول : بيانات التصريح الأساسية</span></h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                        <i class="fas fa-calendar-alt ml-2 text-blue-600"></i>
-                                        التاريخ *
-                                    </label>
-                                    <input type="date" id="manual-permit-date" class="form-input" required 
-                                        value="${existingEntry?.openDate ? new Date(existingEntry.openDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}"
-                                        style="border: 2px solid #2196F3; font-weight: 500;">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                        <i class="fas fa-clipboard-check ml-2 text-blue-600"></i>
-                                        حالة التصريح *
-                                    </label>
-                                    <select id="manual-permit-status" class="form-input" required style="border: 2px solid #2196F3;">
-                                        <option value="">-- اختر الحالة --</option>
-                                        ${statusOptions.map(status => `
-                                            <option value="${Utils.escapeHTML(status)}" ${existingEntry?.status === status ? 'selected' : ''}>${Utils.escapeHTML(status)}</option>
-                                        `).join('')}
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">الموقع / القسم <span class="text-red-500">*</span></label>
+                                    <select id="manual-permit-location" class="form-input transition-all focus:ring-2 focus:ring-blue-200" required>
+                                        <option value="">اختر الموقع / القسم</option>
+                                        ${sites.map(site => {
+            let isSelected = existingEntry && (existingEntry.locationId === site.id || (existingEntry.location && (existingEntry.location.split(' - ')[0] === site.name || existingEntry.location === site.name)));
+            return `<option value="${Utils.escapeHTML(site.id)}" data-site-name="${Utils.escapeHTML(site.name)}" ${isSelected ? 'selected' : ''}>${Utils.escapeHTML(site.name)}</option>`;
+        }).join('')}
                                     </select>
                                 </div>
+                                <div id="manual-permit-sublocation-wrapper" style="display: ${existingEntry?.locationId || existingEntry?.location ? 'block' : 'none'};">
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">المكان الفرعي</label>
+                                    <select id="manual-permit-sublocation" class="form-input transition-all focus:ring-2 focus:ring-blue-200">
+                                        <option value="">اختر المكان الفرعي</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ البدء <span class="text-red-500">*</span></label>
+                                    <input type="datetime-local" id="manual-permit-time-from" class="form-input transition-all focus:ring-2 focus:ring-blue-200" required
+                                        value="${existingEntry?.timeFrom && existingEntry.timeFrom !== 'غير محدد' ? Utils.toDateTimeLocalString(existingEntry.timeFrom) : ''}">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ الانتهاء <span class="text-red-500">*</span></label>
+                                    <input type="datetime-local" id="manual-permit-time-to" class="form-input transition-all focus:ring-2 focus:ring-blue-200" required
+                                        value="${existingEntry?.timeTo && existingEntry.timeTo !== 'غير محدد' ? Utils.toDateTimeLocalString(existingEntry.timeTo) : ''}">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">الجهة المصرح لها بالعمل</label>
+                                    ${hasApprovedEntities ? `
+                                        <div class="relative">
+                                            <select id="manual-permit-authorized-party-select" class="form-input transition-all focus:ring-2 focus:ring-blue-200">
+                                                <option value="">اختر الجهة المعتمدة</option>
+                                                ${approvedEntities.map(entity => `<option value="${Utils.escapeHTML(entity.name || '')}" ${authorizedPartyValue === entity.name ? 'selected' : ''}>${Utils.escapeHTML(entity.name || '')}</option>`).join('')}
+                                                <option value="__custom__">إدخال يدوي</option>
+                                            </select>
+                                            <input type="text" id="manual-permit-authorized-party" class="form-input transition-all focus:ring-2 focus:ring-blue-200 mt-2 hidden"
+                                                value="${Utils.escapeHTML(authorizedPartyValue)}" placeholder="الجهة المصرح لها بالعمل">
+                                        </div>
+                                    ` : `<input type="text" id="manual-permit-authorized-party" class="form-input transition-all focus:ring-2 focus:ring-blue-200" value="${Utils.escapeHTML(authorizedPartyValue)}" placeholder="الجهة المصرح لها بالعمل">`}
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">الجهة الطالبة للتصريح</label>
+                                    <input type="text" id="manual-permit-requesting-party" class="form-input transition-all focus:ring-2 focus:ring-blue-200"
+                                        value="${Utils.escapeHTML(existingEntry?.requestingParty || '')}" placeholder="الجهة الطالبة للتصريح">
+                                </div>
+                                <div class="md:col-span-3">
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">المعدة / المكينة / العملية</label>
+                                    <textarea id="manual-permit-equipment" class="form-input transition-all focus:ring-2 focus:ring-blue-200" rows="2" placeholder="أدخل تفاصيل المعدات أو العملية المستخدمة">${Utils.escapeHTML(existingEntry?.equipment || '')}</textarea>
+                                </div>
+                                <div class="md:col-span-3">
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">الأدوات أو العدد (بعد فحصها وقبولها)</label>
+                                    <textarea id="manual-permit-tools" class="form-input transition-all focus:ring-2 focus:ring-blue-200" rows="2" placeholder="أدخل قائمة الأدوات أو العدد">${Utils.escapeHTML(existingEntry?.tools || existingEntry?.toolsList || '')}</textarea>
+                                </div>
+                                <div class="md:col-span-3">
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">وصف العمل <span class="text-red-500">*</span></label>
+                                    <textarea id="manual-permit-work-description" class="form-input transition-all focus:ring-2 focus:ring-blue-200" rows="4" required placeholder="وصف تفصيلي للعمل">${Utils.escapeHTML(existingEntry?.workDescription || '')}</textarea>
+                                </div>
+                            </div>
+                            <input type="hidden" id="manual-permit-sequential" value="${sequentialNumber}">
+                            <input type="hidden" id="manual-permit-date" value="${existingEntry?.openDate ? new Date(existingEntry.openDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}">
+                            <input type="hidden" id="manual-permit-total-time" value="${Utils.escapeHTML(existingEntry?.totalTime || '')}">
+                        </div>
+
+                        <!-- القسم الثاني: أسماء القائمين بالعمل -->
+                        <div class="ptw-manual-form-section manual-section-2">
+                            <h3><i class="fas fa-users"></i><span>القسم الثاني : أسماء القائمين بالعمل</span></h3>
+                            <p class="text-sm text-gray-600 mb-4 bg-white p-2 rounded border border-gray-100 inline-block">
+                                <i class="fas fa-info-circle text-teal-500 ml-1"></i>أدخل أسماء فريق العمل المسؤول عن تنفيذ النشاط
+                            </p>
+                            <div id="manual-team-members-list" class="space-y-3">
+                                ${(() => {
+            const members = existingEntry?.teamMembers || [{ name: '', id: '' }];
+            return members.map((member, idx) => `
+                                    <div class="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
+                                        <span class="w-8 h-8 flex items-center justify-center bg-teal-100 text-teal-700 rounded-full font-bold text-sm">${idx + 1}</span>
+                                        <input type="text" class="form-input flex-1 manual-team-member-name" placeholder="اسم فرد العمل" value="${Utils.escapeHTML(member.name || '')}">
+                                        <input type="text" class="form-input w-40 manual-team-member-id" placeholder="رقم الهوية" value="${Utils.escapeHTML(member.id || '')}">
+                                        <button type="button" class="btn-icon btn-icon-danger" onclick="this.closest('.flex').remove()" title="حذف"><i class="fas fa-times"></i></button>
+                                    </div>
+                                `).join('');
+        })()}
+                            </div>
+                            <button type="button" id="manual-add-team-member-btn" class="btn-secondary mt-4 hover:bg-teal-50 text-teal-700 border-teal-200">
+                                <i class="fas fa-plus ml-2"></i>إضافة فرد جديد
+                            </button>
+                        </div>
+
+                        <!-- القسم الثالث: تحديد نوع/طبيعة الأعمال -->
+                        <div class="ptw-manual-form-section manual-section-3">
+                            <h3><i class="fas fa-clipboard-check"></i><span>القسم الثالث : تحديد نوع / طبيعة الأعمال</span></h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+                                    <h4 class="font-bold text-red-800 mb-3 border-b border-red-200 pb-2">أعمال ساخنة</h4>
+                                    <div class="space-y-2">
+                                        ${['لحام', 'قطع', 'تسخين', 'شرر', 'أخرى'].map(opt => `
+                                            <label class="flex items-center gap-2 cursor-pointer hover:bg-red-100 p-1 rounded">
+                                                <input type="checkbox" name="manual-hot-work" value="${opt}" class="form-checkbox text-red-600" ${existingEntry?.hotWorkDetails?.includes(opt) ? 'checked' : ''}>
+                                                <span class="text-sm">${opt}</span>
+                                            </label>
+                                        `).join('')}
+                                        <input type="text" id="manual-hot-work-other" class="form-input mt-2 text-sm" placeholder="تفاصيل أخرى..." value="${Utils.escapeHTML(existingEntry?.hotWorkOther || '')}">
+                                    </div>
+                                </div>
+                                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                    <h4 class="font-bold text-gray-800 mb-3 border-b border-gray-200 pb-2">أماكن مغلقة</h4>
+                                    <div class="space-y-2">
+                                        ${['خزان', 'حفرة', 'غرفة تفتيش', 'أنبوب', 'أخرى'].map(opt => `
+                                            <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-1 rounded">
+                                                <input type="checkbox" name="manual-confined-space" value="${opt}" class="form-checkbox text-gray-600" ${existingEntry?.confinedSpaceDetails?.includes(opt) ? 'checked' : ''}>
+                                                <span class="text-sm">${opt}</span>
+                                            </label>
+                                        `).join('')}
+                                        <input type="text" id="manual-confined-space-other" class="form-input mt-2 text-sm" placeholder="تفاصيل أخرى..." value="${Utils.escapeHTML(existingEntry?.confinedSpaceOther || '')}">
+                                    </div>
+                                </div>
+                                <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                                    <h4 class="font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2">عمل على ارتفاع</h4>
+                                    <div class="space-y-2">
+                                        ${['سقالة', 'سلم', 'رافعة', 'سطح', 'أخرى'].map(opt => `
+                                            <label class="flex items-center gap-2 cursor-pointer hover:bg-blue-100 p-1 rounded">
+                                                <input type="checkbox" name="manual-height-work" value="${opt}" class="form-checkbox text-blue-600" ${existingEntry?.heightWorkDetails?.includes(opt) ? 'checked' : ''}>
+                                                <span class="text-sm">${opt}</span>
+                                            </label>
+                                        `).join('')}
+                                        <input type="text" id="manual-height-work-other" class="form-input mt-2 text-sm" placeholder="تفاصيل أخرى..." value="${Utils.escapeHTML(existingEntry?.heightWorkOther || '')}">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 bg-gray-50 p-4 rounded-lg">
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">تفاصيل أعمال الكهرباء</label>
+                                    <input type="text" id="manual-electrical-work-type" class="form-input" value="${Utils.escapeHTML(existingEntry?.electricalWorkType || '')}" placeholder="اذكر تفاصيل أعمال الكهرباء">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">تفاصيل الأعمال على البارد</label>
+                                    <input type="text" id="manual-cold-work-type" class="form-input" value="${Utils.escapeHTML(existingEntry?.coldWorkType || '')}" placeholder="اذكر تفاصيل الأعمال على البارد">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">تفاصيل أعمال أخرى</label>
+                                    <input type="text" id="manual-other-work-type" class="form-input" value="${Utils.escapeHTML(existingEntry?.otherWorkType || '')}" placeholder="اذكر تفاصيل أعمال أخرى (إن وجدت)">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-6 bg-yellow-50 p-4 rounded-lg border border-yellow-100">
+                                <div class="md:col-span-4 font-bold text-yellow-800 mb-2 flex items-center"><i class="fas fa-digging ml-2"></i>بيانات الحفر (إن وجد)</div>
+                                <div><label class="block text-sm font-semibold text-gray-700 mb-1">الطول (م)</label><input type="text" id="manual-excavation-length" class="form-input" value="${Utils.escapeHTML(existingEntry?.excavationLength || '')}" placeholder="—"></div>
+                                <div><label class="block text-sm font-semibold text-gray-700 mb-1">العرض (م)</label><input type="text" id="manual-excavation-width" class="form-input" value="${Utils.escapeHTML(existingEntry?.excavationWidth || '')}" placeholder="—"></div>
+                                <div><label class="block text-sm font-semibold text-gray-700 mb-1">العمق (م)</label><input type="text" id="manual-excavation-depth" class="form-input" value="${Utils.escapeHTML(existingEntry?.excavationDepth || '')}" placeholder="—"></div>
+                                <div><label class="block text-sm font-semibold text-gray-700 mb-1">نوع التربة</label><input type="text" id="manual-excavation-soil" class="form-input" value="${Utils.escapeHTML(existingEntry?.soilType || '')}" placeholder="مثال: رملية"></div>
                             </div>
                         </div>
 
-                        <!-- 2) نوع التصريح -->
-                        <div class="permit-section section-2">
-                            <h3>
-                                <i class="fas fa-tags"></i>
-                                <span>2) نوع التصريح</span>
-                            </h3>
+                        <!-- القسم الرابع: المتطلبات والمرفقات -->
+                        <div class="ptw-manual-form-section manual-section-4">
+                            <h3><i class="fas fa-tasks"></i><span>القسم الرابع : المتطلبات والمرفقات</span></h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                ${permitTypes.map((type, index) => {
-            // التحقق من الأنواع المحددة مسبقاً (يمكن أن تكون نصاً أو مصفوفة)
-            let isChecked = false;
-            if (existingEntry?.permitType) {
-                if (Array.isArray(existingEntry.permitType)) {
-                    isChecked = existingEntry.permitType.includes(type);
-                } else if (typeof existingEntry.permitType === 'string') {
-                    // إذا كان النص يحتوي على فاصلة أو فاصلة منقوطة، نفصلها
-                    const typesArray = existingEntry.permitType.split(/[،,;]/).map(t => t.trim());
-                    isChecked = typesArray.includes(type) || existingEntry.permitType === type;
-                }
-            }
-            return `
-                                    <label class="flex items-center p-3 bg-white rounded-lg border-2 border-purple-300 hover:bg-purple-50 cursor-pointer transition-all">
-                                        <input type="checkbox" 
-                                            name="manual-permit-type" 
-                                            value="${Utils.escapeHTML(type)}" 
-                                            class="form-checkbox ml-2 text-purple-600"
-                                            ${isChecked ? 'checked' : ''}
-                                            onchange="this.closest('label').classList.toggle('bg-purple-100', this.checked)">
-                                        <span class="font-semibold text-gray-700">${Utils.escapeHTML(type)}</span>
-                                    </label>
-                                `;
+                                <label class="flex items-center p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all bg-white">
+                                    <input type="checkbox" id="manual-permit-preStartChecklist" class="form-checkbox h-5 w-5 text-orange-600 rounded ml-3" ${existingEntry?.preStartChecklist ? 'checked' : ''}><span class="font-medium">قائمة التحقق بقرار بدء العمل</span>
+                                </label>
+                                <label class="flex items-center p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all bg-white">
+                                    <input type="checkbox" id="manual-permit-lotoApplied" class="form-checkbox h-5 w-5 text-orange-600 rounded ml-3" ${existingEntry?.lotoApplied ? 'checked' : ''}><span class="font-medium">تطبيق نظام العزل LOTO</span>
+                                </label>
+                                <label class="flex items-center p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all bg-white">
+                                    <input type="checkbox" id="manual-permit-governmentPermits" class="form-checkbox h-5 w-5 text-orange-600 rounded ml-3" ${existingEntry?.governmentPermits ? 'checked' : ''}><span class="font-medium">تصاريح جهات حكومية</span>
+                                </label>
+                                <label class="flex items-center p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all bg-white">
+                                    <input type="checkbox" id="manual-permit-riskAssessmentAttached" class="form-checkbox h-5 w-5 text-orange-600 rounded ml-3" ${existingEntry?.riskAssessmentAttached ? 'checked' : ''}><span class="font-medium">تحليل المخاطر ووسائل التحكم</span>
+                                </label>
+                                <label class="flex items-center p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all bg-white">
+                                    <input type="checkbox" id="manual-permit-gasTesting" class="form-checkbox h-5 w-5 text-orange-600 rounded ml-3" ${existingEntry?.gasTesting ? 'checked' : ''}><span class="font-medium">قياس الغازات</span>
+                                </label>
+                                <label class="flex items-center p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-all bg-white">
+                                    <input type="checkbox" id="manual-permit-mocRequest" class="form-checkbox h-5 w-5 text-orange-600 rounded ml-3" ${existingEntry?.mocRequest ? 'checked' : ''}><span class="font-medium">طلب تغيير فني (MOC)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- القسم الخامس: تحديد مهمات الوقاية -->
+                        <div class="ptw-manual-form-section manual-section-5">
+                            <h3><i class="fas fa-hard-hat"></i><span>القسم الخامس : تحديد مهمات الوقاية</span></h3>
+                            <div id="manual-ppe-matrix" class="bg-gray-50 rounded-lg p-2">
+                                ${typeof PPEMatrix !== 'undefined' ? PPEMatrix.generate('manual-ppe-matrix') : '<div class="text-center p-4 text-gray-500">مصفوفة المهمات غير محملة - يمكنك إدخال البيانات يدوياً أدناه</div>'}
+                            </div>
+                            <div class="mt-4">
+                                <label class="block text-sm font-bold text-gray-700 mb-2">مهمات الوقاية المطلوبة (يدوي)</label>
+                                <textarea id="manual-ppe-notes" class="form-input" rows="2" placeholder="أدخل مهمات الوقاية المطلوبة...">${Utils.escapeHTML(existingEntry?.ppeNotes || (existingEntry?.requiredPPE ? existingEntry.requiredPPE.join('، ') : ''))}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- القسم السادس: مصفوفة تقييم المخاطر -->
+                        <div class="ptw-manual-form-section manual-section-6">
+                            <h3><i class="fas fa-exclamation-triangle"></i><span>القسم السادس : مصفوفة تقييم المخاطر</span></h3>
+                            <p class="text-sm text-gray-600 mb-4 bg-white p-2 rounded border border-gray-100 inline-block">
+                                <i class="fas fa-mouse-pointer text-red-500 ml-1"></i>اضغط على خلية في المصفوفة لتحديد مستوى المخاطر
+                            </p>
+                            
+                            <!-- مصفوفة المخاطر التفاعلية -->
+                            <div class="bg-white rounded-lg p-4 border border-gray-200">
+                                <div class="overflow-x-auto">
+                                    <table class="w-full border-collapse text-center" id="manual-risk-matrix-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="p-2 bg-gray-100 border border-gray-300 font-bold text-sm" rowspan="2">الاحتمالية</th>
+                                                <th class="p-2 bg-gray-700 text-white border border-gray-300 font-bold" colspan="5">الخطورة (العواقب)</th>
+                                            </tr>
+                                            <tr>
+                                                <th class="p-2 bg-green-100 border border-gray-300 text-xs font-semibold">1 - طفيف</th>
+                                                <th class="p-2 bg-yellow-100 border border-gray-300 text-xs font-semibold">2 - بسيط</th>
+                                                <th class="p-2 bg-orange-100 border border-gray-300 text-xs font-semibold">3 - متوسط</th>
+                                                <th class="p-2 bg-red-100 border border-gray-300 text-xs font-semibold">4 - خطير</th>
+                                                <th class="p-2 bg-red-200 border border-gray-300 text-xs font-semibold">5 - كارثي</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${[5, 4, 3, 2, 1].map(likelihood => {
+            const likelihoodLabels = { 5: 'شبه مؤكد', 4: 'محتمل جداً', 3: 'محتمل', 2: 'غير محتمل', 1: 'نادر' };
+            return `<tr>
+                                                <td class="p-2 bg-gray-100 border border-gray-300 font-semibold text-sm">${likelihood} - ${likelihoodLabels[likelihood]}</td>
+                                                ${[1, 2, 3, 4, 5].map(consequence => {
+                const riskScore = likelihood * consequence;
+                let cellColor = '';
+                let riskLevel = '';
+                if (riskScore <= 4) { cellColor = 'bg-green-500 hover:bg-green-600'; riskLevel = 'منخفض'; }
+                else if (riskScore <= 9) { cellColor = 'bg-yellow-400 hover:bg-yellow-500'; riskLevel = 'متوسط'; }
+                else if (riskScore <= 16) { cellColor = 'bg-orange-500 hover:bg-orange-600'; riskLevel = 'مرتفع'; }
+                else { cellColor = 'bg-red-600 hover:bg-red-700'; riskLevel = 'خطير جداً'; }
+                const isSelected = existingEntry?.riskLikelihood == likelihood && existingEntry?.riskConsequence == consequence;
+                return `<td class="p-0 border border-gray-300">
+                                                    <button type="button" class="manual-risk-cell w-full h-full p-3 ${cellColor} text-white font-bold cursor-pointer transition-all ${isSelected ? 'ring-4 ring-blue-500 ring-inset' : ''}" data-likelihood="${likelihood}" data-consequence="${consequence}" data-score="${riskScore}" data-level="${riskLevel}">
+                                                        ${riskScore}
+                                                    </button>
+                                                </td>`;
+            }).join('')}
+                                            </tr>`;
+        }).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- نتيجة تقييم المخاطر -->
+                                <div id="manual-risk-result" class="mt-4 p-4 rounded-lg border-2 ${existingEntry?.riskScore ? '' : 'hidden'}" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+                                    <div class="flex items-center justify-between flex-wrap gap-4">
+                                        <div class="flex items-center gap-3">
+                                            <div id="manual-risk-result-badge" class="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg" style="background: ${existingEntry?.riskScore <= 4 ? '#22c55e' : existingEntry?.riskScore <= 9 ? '#eab308' : existingEntry?.riskScore <= 16 ? '#f97316' : '#dc2626'}">
+                                                ${existingEntry?.riskScore || '?'}
+                                            </div>
+                                            <div>
+                                                <p class="font-bold text-gray-800 text-lg">درجة المخاطر: <span id="manual-risk-score-display">${existingEntry?.riskScore || '—'}</span></p>
+                                                <p class="text-gray-600">مستوى المخاطر: <span id="manual-risk-level-display" class="font-semibold">${existingEntry?.riskLevel || '—'}</span></p>
+                                            </div>
+                                        </div>
+                                        <div class="text-sm text-gray-500">
+                                            <p>الاحتمالية: <span id="manual-risk-likelihood-display" class="font-semibold">${existingEntry?.riskLikelihood || '—'}</span></p>
+                                            <p>الخطورة: <span id="manual-risk-consequence-display" class="font-semibold">${existingEntry?.riskConsequence || '—'}</span></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- حقول مخفية -->
+                                <input type="hidden" id="manual-risk-likelihood" value="${existingEntry?.riskLikelihood || ''}">
+                                <input type="hidden" id="manual-risk-consequence" value="${existingEntry?.riskConsequence || ''}">
+                                <input type="hidden" id="manual-risk-score" value="${existingEntry?.riskScore || ''}">
+                                <input type="hidden" id="manual-risk-level" value="${existingEntry?.riskLevel || ''}">
+                            </div>
+                            
+                            <div class="mt-4 bg-red-50 p-4 rounded-lg border border-red-100">
+                                <label class="block text-sm font-bold text-gray-700 mb-2"><i class="fas fa-sticky-note ml-2 text-red-500"></i>ملاحظات تقييم المخاطر</label>
+                                <textarea id="manual-risk-notes" class="form-input bg-white" rows="3" placeholder="ملاحظات إضافية حول المخاطر المحتملة...">${Utils.escapeHTML(existingEntry?.riskNotes || '')}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- القسم السابع: دائرة الاعتمادات -->
+                        <div class="ptw-manual-form-section manual-section-7">
+                            <h3><i class="fas fa-signature"></i><span>القسم السابع : دائرة الاعتمادات</span></h3>
+                            <p class="text-sm text-gray-600 mb-4 bg-white p-2 rounded border border-gray-100 inline-block">
+                                <i class="fas fa-info-circle text-amber-600 ml-1"></i>أدخل بيانات جهات الاعتماد للتصريح
+                            </p>
+                            
+                            <!-- جدول الاعتمادات -->
+                            <div class="overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm">
+                                <table class="w-full">
+                                    <thead>
+                                        <tr class="bg-gradient-to-r from-amber-600 to-amber-700 text-white">
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-amber-500" style="width: 5%;">#</th>
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-amber-500" style="width: 20%;">الموافقات</th>
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-amber-500" style="width: 25%;">الاسم</th>
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-amber-500" style="width: 20%;">التاريخ والوقت</th>
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-amber-500" style="width: 25%;">ملاحظات</th>
+                                            <th class="p-3 text-center font-semibold text-sm border-b border-amber-500" style="width: 5%;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="manual-approvals-list">
+                                        ${(() => {
+            const defaultRoles = ['مسؤول التصريح', 'مسؤول السلامة', 'مسؤول التشغيل', 'مدير المنطقة'];
+            const approvals = existingEntry?.manualApprovals && existingEntry.manualApprovals.length > 0 
+                ? existingEntry.manualApprovals 
+                : defaultRoles.map(role => ({ role, name: '', date: '', notes: '' }));
+            return approvals.map((appr, idx) => `
+                                        <tr class="manual-approval-row border-b border-gray-100 hover:bg-amber-50 transition-colors">
+                                            <td class="p-2 text-center font-bold text-amber-700">${idx + 1}</td>
+                                            <td class="p-2"><input type="text" class="form-input text-sm manual-approval-role" placeholder="الدور / المسمى" value="${Utils.escapeHTML(appr.role || '')}"></td>
+                                            <td class="p-2"><input type="text" class="form-input text-sm manual-approval-name" placeholder="اسم المعتمد" value="${Utils.escapeHTML(appr.name || '')}"></td>
+                                            <td class="p-2"><input type="datetime-local" class="form-input text-sm manual-approval-date" value="${appr.date ? Utils.toDateTimeLocalString(appr.date) : ''}"></td>
+                                            <td class="p-2"><input type="text" class="form-input text-sm manual-approval-notes" placeholder="ملاحظات" value="${Utils.escapeHTML(appr.notes || '')}"></td>
+                                            <td class="p-2 text-center"><button type="button" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-full transition-colors" onclick="this.closest('tr').remove(); PTW.updateApprovalNumbers('manual-approvals-list')" title="حذف"><i class="fas fa-trash-alt"></i></button></td>
+                                        </tr>
+                                    `).join('');
+        })()}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="button" id="manual-add-approval-btn" class="btn-secondary mt-4 bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100">
+                                <i class="fas fa-plus ml-2"></i>إضافة صف اعتماد جديد
+                            </button>
+                        </div>
+
+                        <!-- القسم الثامن: إغلاق التصريح -->
+                        <div class="ptw-manual-form-section manual-section-8">
+                            <h3><i class="fas fa-lock"></i><span>القسم الثامن : إغلاق التصريح</span></h3>
+                            <div class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-200 rounded-xl p-6 mb-6 shadow-md" style="text-align: center;">
+                                <p class="text-gray-800 text-base leading-relaxed font-medium" style="line-height: 2.2; color: #1e40af;">
+                                    <i class="fas fa-check-circle text-green-600 ml-2"></i>
+                                    تم متابعة العمل حتى النهاية وتم فحص موقع العمل والمواقع المجاورة له والتأكد من خلوها من الأخطار المحتمل حدوثها
+                                    <i class="fas fa-check-circle text-green-600 mr-2"></i>
+                                </p>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                ${statusOptions.map((status, idx) => {
+            const statusStyles = { 'اكتمل العمل بشكل آمن': { icon: 'fa-check-circle', color: '#4caf50', bg: '#e8f5e9' }, 'لم يكتمل العمل': { icon: 'fa-pause-circle', color: '#ff9800', bg: '#fff3e0' }, 'إغلاق جبري': { icon: 'fa-exclamation-circle', color: '#f44336', bg: '#ffebee' } };
+            const style = statusStyles[status];
+            const isSelected = existingEntry?.status === status;
+            return `<label class="flex items-center space-x-2 space-x-reverse cursor-pointer p-3 rounded-lg border border-gray-200 hover:bg-opacity-80 transition-all" style="background: ${isSelected ? style.bg : 'white'}; border-color: ${isSelected ? style.color : '#e5e7eb'};">
+                                    <input type="radio" name="manual-permit-status-radio" value="${Utils.escapeHTML(status)}" class="form-radio h-5 w-5" style="accent-color: ${style.color};" ${isSelected ? 'checked' : ''} onchange="document.getElementById('manual-permit-status').value = this.value;">
+                                    <i class="fas ${style.icon}" style="color: ${style.color};"></i>
+                                    <span class="font-medium text-gray-700">${Utils.escapeHTML(status)}</span>
+                                </label>`;
         }).join('')}
                             </div>
-                            <small class="text-gray-500 mt-2 block">
-                                <i class="fas fa-info-circle ml-1"></i>
-                                يمكنك اختيار أكثر من نوع تصريح
-                            </small>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div><label class="block text-sm font-bold text-gray-700 mb-2">وقت الإغلاق:</label><input type="datetime-local" id="manual-closure-time" class="form-input" value="${existingEntry?.closureDate ? Utils.toDateTimeLocalString(existingEntry.closureDate) : ''}"></div>
+                                <div><label class="block text-sm font-bold text-gray-700 mb-2">السبب:</label><input type="text" id="manual-closure-reason" class="form-input" value="${Utils.escapeHTML(existingEntry?.closureReason || '')}" placeholder="اذكر سبب الإغلاق"></div>
+                            </div>
+                            <input type="hidden" id="manual-permit-status" value="${Utils.escapeHTML(existingEntry?.status || '')}">
                         </div>
 
-                        <!-- 3) الجهات والموقع -->
-                        <div class="permit-section section-3">
-                            <h3>
-                                <i class="fas fa-building ml-2"></i>
-                                <span>3) الجهات والموقع</span>
-                            </h3>
-                            <div class="space-y-5">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <div>
-                                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                            <i class="fas fa-hand-paper ml-2 text-orange-600"></i>
-                                            الجهة الطالبة *
-                                        </label>
-                                        <input type="text" id="manual-permit-requesting-party" class="form-input" required 
-                                            value="${Utils.escapeHTML(existingEntry?.requestingParty || '')}" 
-                                            placeholder="أدخل الجهة الطالبة"
-                                            style="border: 2px solid #FF9800; font-weight: 500;">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                            <i class="fas fa-user-check ml-2 text-orange-600"></i>
-                                            الجهة المصرح لها *
-                                        </label>
-                                        <input type="text" id="manual-permit-authorized-party" class="form-input" required 
-                                            value="${Utils.escapeHTML(existingEntry?.authorizedParty || '')}" 
-                                            placeholder="أدخل الجهة المصرح لها"
-                                            style="border: 2px solid #FF9800; font-weight: 500;">
-                                    </div>
+                        <!-- القسم التاسع: اعتماد إغلاق التصريح -->
+                        <div class="ptw-manual-form-section manual-section-9">
+                            <h3><i class="fas fa-check-circle"></i><span>القسم التاسع : اعتماد إغلاق التصريح</span></h3>
+                            <p class="text-sm text-gray-600 mb-4 bg-white p-2 rounded border border-gray-100 inline-block">
+                                <i class="fas fa-info-circle text-cyan-600 ml-1"></i>أدخل بيانات جهات اعتماد إغلاق التصريح
+                            </p>
+                            
+                            <!-- جدول اعتمادات الإغلاق -->
+                            <div class="overflow-x-auto bg-white rounded-lg border border-gray-200 shadow-sm">
+                                <table class="w-full">
+                                    <thead>
+                                        <tr class="bg-gradient-to-r from-cyan-600 to-cyan-700 text-white">
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-cyan-500" style="width: 5%;">#</th>
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-cyan-500" style="width: 20%;">الموافقات</th>
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-cyan-500" style="width: 25%;">الاسم</th>
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-cyan-500" style="width: 20%;">التاريخ والوقت</th>
+                                            <th class="p-3 text-right font-semibold text-sm border-b border-cyan-500" style="width: 25%;">ملاحظات</th>
+                                            <th class="p-3 text-center font-semibold text-sm border-b border-cyan-500" style="width: 5%;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="manual-closure-approvals-list">
+                                        ${(() => {
+            const defaultClosureRoles = ['المقاول المنفذ', 'مسؤول السلامة', 'مسؤول التشغيل'];
+            const closureApprovals = existingEntry?.manualClosureApprovals && existingEntry.manualClosureApprovals.length > 0 
+                ? existingEntry.manualClosureApprovals 
+                : defaultClosureRoles.map(role => ({ role, name: '', date: '', notes: '' }));
+            return closureApprovals.map((appr, idx) => `
+                                        <tr class="manual-closure-approval-row border-b border-gray-100 hover:bg-cyan-50 transition-colors">
+                                            <td class="p-2 text-center font-bold text-cyan-700">${idx + 1}</td>
+                                            <td class="p-2"><input type="text" class="form-input text-sm manual-closure-approval-role" placeholder="الدور / المسمى" value="${Utils.escapeHTML(appr.role || '')}"></td>
+                                            <td class="p-2"><input type="text" class="form-input text-sm manual-closure-approval-name" placeholder="اسم المعتمد" value="${Utils.escapeHTML(appr.name || '')}"></td>
+                                            <td class="p-2"><input type="datetime-local" class="form-input text-sm manual-closure-approval-date" value="${appr.date ? Utils.toDateTimeLocalString(appr.date) : ''}"></td>
+                                            <td class="p-2"><input type="text" class="form-input text-sm manual-closure-approval-notes" placeholder="ملاحظات" value="${Utils.escapeHTML(appr.notes || '')}"></td>
+                                            <td class="p-2 text-center"><button type="button" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-full transition-colors" onclick="this.closest('tr').remove(); PTW.updateApprovalNumbers('manual-closure-approvals-list')" title="حذف"><i class="fas fa-trash-alt"></i></button></td>
+                                        </tr>
+                                    `).join('');
+        })()}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="button" id="manual-add-closure-approval-btn" class="btn-secondary mt-4 bg-cyan-50 text-cyan-700 border-cyan-300 hover:bg-cyan-100">
+                                <i class="fas fa-plus ml-2"></i>إضافة صف اعتماد إغلاق جديد
+                            </button>
+                        </div>
+
+                        <!-- القسم العاشر: مسؤولي المتابعة -->
+                        <div class="ptw-manual-form-section manual-section-10">
+                            <h3><i class="fas fa-user-tie"></i><span>القسم العاشر : مسؤولي المتابعة</span></h3>
+                            <p class="text-sm text-gray-600 mb-4 bg-white p-2 rounded border border-gray-100 inline-block">
+                                <i class="fas fa-info-circle text-indigo-500 ml-1"></i>أدخل أسماء المسؤولين عن متابعة العمل
+                            </p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2"><i class="fas fa-user-tie ml-2 text-indigo-600"></i>مسؤول المتابعة الأول</label>
+                                    <input type="text" id="manual-permit-supervisor1" class="form-input transition-all focus:ring-2 focus:ring-indigo-200" value="${Utils.escapeHTML(existingEntry?.supervisor1 || '')}" placeholder="أدخل اسم المسؤول الأول">
                                 </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <div>
-                                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                            <i class="fas fa-industry ml-2 text-orange-600"></i>
-                                            المصنع / الموقع *
-                                        </label>
-                                        <select id="manual-permit-location" class="form-input" required style="border: 2px solid #FF9800;">
-                                            <option value="">-- اختر المصنع / الموقع --</option>
-                                            ${sites.map(site => {
-            // البحث عن الموقع المحدد - يمكن أن يكون locationId أو اسم الموقع
-            let isSelected = false;
-            if (existingEntry) {
-                if (existingEntry.locationId === site.id) {
-                    isSelected = true;
-                } else if (existingEntry.location) {
-                    // إذا كان الموقع يحتوي على "-" (أي يوجد موقع فرعي)
-                    const locationParts = existingEntry.location.split(' - ');
-                    const mainLocation = locationParts[0];
-                    if (mainLocation === site.name || existingEntry.location === site.name) {
-                        isSelected = true;
-                    }
-                }
-            }
-            return `
-                                                <option value="${Utils.escapeHTML(site.id)}" data-site-name="${Utils.escapeHTML(site.name)}" ${isSelected ? 'selected' : ''}>${Utils.escapeHTML(site.name)}</option>
-                                            `;
-        }).join('')}
-                                        </select>
-                                    </div>
-                                    <div id="manual-permit-sublocation-wrapper">
-                                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                            <i class="fas fa-map-marker-alt ml-2 text-orange-600"></i>
-                                            الموقع الفرعي
-                                        </label>
-                                        <select id="manual-permit-sublocation" class="form-input" style="border: 2px solid #FF9800;">
-                                            <option value="">-- اختر الموقع الفرعي (اختياري) --</option>
-                                        </select>
-                                        <small class="text-gray-500 mt-1 block">
-                                            <i class="fas fa-info-circle ml-1"></i>
-                                            يتم تحديث القائمة تلقائياً بناءً على الموقع المحدد
-                                        </small>
-                                    </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2"><i class="fas fa-user-tie ml-2 text-indigo-600"></i>مسؤول المتابعة الثاني</label>
+                                    <input type="text" id="manual-permit-supervisor2" class="form-input transition-all focus:ring-2 focus:ring-indigo-200" value="${Utils.escapeHTML(existingEntry?.supervisor2 || '')}" placeholder="أدخل اسم المسؤول الثاني">
                                 </div>
                             </div>
                         </div>
 
-                        <!-- 4) التوقيت -->
-                        <div class="permit-section section-4">
-                            <h3>
-                                <i class="fas fa-clock ml-2"></i>
-                                <span>4) التوقيت</span>
-                            </h3>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                        <i class="fas fa-calendar-check ml-2 text-green-600"></i>
-                                        الوقت من *
-                                    </label>
-                                    <input type="datetime-local" id="manual-permit-time-from" class="form-input" required 
-                                        value="${existingEntry?.timeFrom && existingEntry.timeFrom !== 'غير محدد' ? Utils.toDateTimeLocalString(existingEntry.timeFrom) : ''}"
-                                        style="border: 2px solid #4CAF50; font-weight: 500;">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                        <i class="fas fa-calendar-times ml-2 text-green-600"></i>
-                                        الوقت إلى *
-                                    </label>
-                                    <input type="datetime-local" id="manual-permit-time-to" class="form-input" required 
-                                        value="${existingEntry?.timeTo && existingEntry.timeTo !== 'غير محدد' ? Utils.toDateTimeLocalString(existingEntry.timeTo) : ''}"
-                                        style="border: 2px solid #4CAF50; font-weight: 500;">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                        <i class="fas fa-hourglass-half ml-2 text-green-600"></i>
-                                        إجمالي الوقت
-                                    </label>
-                                    <input type="text" id="manual-permit-total-time" class="form-input" readonly 
-                                        value="${Utils.escapeHTML(existingEntry?.totalTime || '')}" 
-                                        style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 50%); font-weight: 700; border: 2px solid #388E3C; color: #1B5E20;">
-                                    <small class="text-gray-500 mt-1 block">
-                                        <i class="fas fa-calculator ml-1"></i>
-                                        يُحسب تلقائياً بعد إدخال الوقت من وإلى
-                                    </small>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 5) وصف العمل والمتابعة -->
-                        <div class="permit-section section-5">
-                            <h3>
-                                <i class="fas fa-tasks ml-2"></i>
-                                <span>5) وصف العمل والمتابعة</span>
-                            </h3>
-                            <div class="space-y-5">
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                        <i class="fas fa-file-alt ml-2 text-pink-600"></i>
-                                        وصف العمل *
-                                    </label>
-                                    <textarea id="manual-permit-work-description" class="form-input" rows="5" required 
-                                        placeholder="أدخل وصف تفصيلي للعمل المطلوب تنفيذه..."
-                                        style="border: 2px solid #E91E63; font-size: 1rem;">${Utils.escapeHTML(existingEntry?.workDescription || '')}</textarea>
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <div>
-                                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                            <i class="fas fa-user-tie ml-2 text-pink-600"></i>
-                                            مسؤول المتابعة 01
-                                        </label>
-                                        <input type="text" id="manual-permit-supervisor1" class="form-input" 
-                                            value="${Utils.escapeHTML(existingEntry?.supervisor1 || '')}" 
-                                            placeholder="أدخل اسم المسؤول الأول"
-                                            style="border: 2px solid #E91E63;">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                            <i class="fas fa-user-tie ml-2 text-pink-600"></i>
-                                            مسؤول المتابعة 02
-                                        </label>
-                                        <input type="text" id="manual-permit-supervisor2" class="form-input" 
-                                            value="${Utils.escapeHTML(existingEntry?.supervisor2 || '')}" 
-                                            placeholder="أدخل اسم المسؤول الثاني"
-                                            style="border: 2px solid #E91E63;">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </form>
                 </div>
-                <div class="modal-footer form-actions-centered" style="padding: 20px 30px; background: white; border-top: 2px solid #e5e7eb; display: flex; justify-content: flex-end; gap: 12px;">
-                    <button type="button" class="btn-secondary" data-action="close" style="padding: 12px 24px; font-weight: 600;">
-                        <i class="fas fa-times ml-2"></i>
-                        إلغاء
+
+                <!-- أزرار الإجراءات -->
+                <div class="pt-6 border-t-2 border-gray-200" style="padding: 20px 24px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;">
+                    <button type="button" class="btn-secondary" data-action="close" style="padding: 14px 32px; font-weight: 600; border-radius: 10px;">
+                        <i class="fas fa-times ml-2"></i>إلغاء
                     </button>
-                    <button type="submit" form="manual-permit-form" class="btn-primary" style="padding: 12px 24px; font-weight: 600; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);">
-                        <i class="fas fa-save ml-2"></i>
-                        ${isEdit ? 'حفظ التعديلات' : 'حفظ التصريح'}
+                    <button type="submit" form="manual-permit-form" class="btn-primary" style="padding: 14px 40px; font-weight: 600; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); border-radius: 10px; box-shadow: 0 4px 15px rgba(30, 60, 114, 0.3);">
+                        <i class="fas fa-save ml-2"></i>${isEdit ? 'حفظ التعديلات' : 'تسجيل التصريح'}
                     </button>
                 </div>
             </div>
@@ -5983,9 +6322,164 @@ const PTW = {
             updateSublocationOptions();
         }
 
+        // معالجة اختيار الجهة المصرح لها من القائمة المنسدلة
+        const authorizedPartySelect = modal.querySelector('#manual-permit-authorized-party-select');
+        const authorizedPartyInput = modal.querySelector('#manual-permit-authorized-party');
+        
+        if (authorizedPartySelect && authorizedPartyInput) {
+            // تعيين القيمة الأولية من القائمة
+            if (authorizedPartySelect.value && authorizedPartySelect.value !== '__custom__') {
+                authorizedPartyInput.value = authorizedPartySelect.value;
+                authorizedPartyInput.classList.add('hidden');
+            } else if (authorizedPartyInput.value && !Array.from(authorizedPartySelect.options).find(o => o.value === authorizedPartyInput.value)) {
+                // إذا كانت القيمة الموجودة ليست في القائمة، أظهر حقل الإدخال اليدوي
+                authorizedPartySelect.value = '__custom__';
+                authorizedPartyInput.classList.remove('hidden');
+            }
+
+            authorizedPartySelect.addEventListener('change', () => {
+                if (authorizedPartySelect.value === '__custom__') {
+                    authorizedPartyInput.classList.remove('hidden');
+                    authorizedPartyInput.value = '';
+                    authorizedPartyInput.focus();
+                } else {
+                    authorizedPartyInput.classList.add('hidden');
+                    authorizedPartyInput.value = authorizedPartySelect.value;
+                }
+            });
+        }
+
+        // التحقق من اختيار حالة التصريح
+        const statusRadios = modal.querySelectorAll('input[name="manual-permit-status-radio"]');
+        const statusHiddenInput = modal.querySelector('#manual-permit-status');
+        
+        // تعيين القيمة الأولية للحالة
+        if (existingEntry?.status) {
+            statusRadios.forEach(radio => {
+                if (radio.value === existingEntry.status) {
+                    radio.checked = true;
+                    statusHiddenInput.value = radio.value;
+                    // تحديث تنسيق البطاقة
+                    const label = radio.closest('label');
+                    if (label) {
+                        const statusStyles = {
+                            'اكتمل العمل بشكل آمن': { color: '#4caf50', bg: '#e8f5e9' },
+                            'لم يكتمل العمل': { color: '#ff9800', bg: '#fff3e0' },
+                            'إغلاق جبري': { color: '#f44336', bg: '#ffebee' }
+                        };
+                        const style = statusStyles[radio.value];
+                        if (style) {
+                            label.style.borderColor = style.color;
+                            label.style.background = style.bg;
+                        }
+                    }
+                }
+            });
+        }
+
+        // معالجة إضافة فرد عمل جديد
+        modal.querySelector('#manual-add-team-member-btn')?.addEventListener('click', () => {
+            const list = modal.querySelector('#manual-team-members-list');
+            const count = list.querySelectorAll('.flex').length + 1;
+            const newRow = document.createElement('div');
+            newRow.className = 'flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200';
+            newRow.innerHTML = `
+                <span class="w-8 h-8 flex items-center justify-center bg-teal-100 text-teal-700 rounded-full font-bold text-sm">${count}</span>
+                <input type="text" class="form-input flex-1 manual-team-member-name" placeholder="اسم فرد العمل" value="">
+                <input type="text" class="form-input w-40 manual-team-member-id" placeholder="رقم الهوية" value="">
+                <button type="button" class="btn-icon btn-icon-danger" onclick="this.closest('.flex').remove()" title="حذف"><i class="fas fa-times"></i></button>
+            `;
+            list.appendChild(newRow);
+        });
+
+        // معالجة الضغط على مصفوفة المخاطر
+        modal.querySelectorAll('.manual-risk-cell').forEach(cell => {
+            cell.addEventListener('click', () => {
+                const likelihood = cell.dataset.likelihood;
+                const consequence = cell.dataset.consequence;
+                const score = cell.dataset.score;
+                const level = cell.dataset.level;
+                
+                // إزالة التحديد من جميع الخلايا
+                modal.querySelectorAll('.manual-risk-cell').forEach(c => {
+                    c.classList.remove('ring-4', 'ring-blue-500', 'ring-inset');
+                });
+                
+                // تحديد الخلية المختارة
+                cell.classList.add('ring-4', 'ring-blue-500', 'ring-inset');
+                
+                // تحديث الحقول المخفية
+                modal.querySelector('#manual-risk-likelihood').value = likelihood;
+                modal.querySelector('#manual-risk-consequence').value = consequence;
+                modal.querySelector('#manual-risk-score').value = score;
+                modal.querySelector('#manual-risk-level').value = level;
+                
+                // تحديث العرض
+                const resultDiv = modal.querySelector('#manual-risk-result');
+                resultDiv.classList.remove('hidden');
+                
+                modal.querySelector('#manual-risk-score-display').textContent = score;
+                modal.querySelector('#manual-risk-level-display').textContent = level;
+                modal.querySelector('#manual-risk-likelihood-display').textContent = likelihood;
+                modal.querySelector('#manual-risk-consequence-display').textContent = consequence;
+                
+                // تحديث لون الشارة
+                const badge = modal.querySelector('#manual-risk-result-badge');
+                const scoreNum = parseInt(score);
+                let bgColor = '#22c55e';
+                if (scoreNum > 4 && scoreNum <= 9) bgColor = '#eab308';
+                else if (scoreNum > 9 && scoreNum <= 16) bgColor = '#f97316';
+                else if (scoreNum > 16) bgColor = '#dc2626';
+                badge.style.background = bgColor;
+                badge.textContent = score;
+            });
+        });
+
+        // معالجة إضافة اعتماد جديد (تصميم جدول)
+        modal.querySelector('#manual-add-approval-btn')?.addEventListener('click', () => {
+            const tbody = modal.querySelector('#manual-approvals-list');
+            const count = tbody.querySelectorAll('tr').length + 1;
+            const newRow = document.createElement('tr');
+            newRow.className = 'manual-approval-row border-b border-gray-100 hover:bg-amber-50 transition-colors';
+            newRow.innerHTML = `
+                <td class="p-2 text-center font-bold text-amber-700">${count}</td>
+                <td class="p-2"><input type="text" class="form-input text-sm manual-approval-role" placeholder="الدور / المسمى" value=""></td>
+                <td class="p-2"><input type="text" class="form-input text-sm manual-approval-name" placeholder="اسم المعتمد" value=""></td>
+                <td class="p-2"><input type="datetime-local" class="form-input text-sm manual-approval-date" value=""></td>
+                <td class="p-2"><input type="text" class="form-input text-sm manual-approval-notes" placeholder="ملاحظات" value=""></td>
+                <td class="p-2 text-center"><button type="button" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-full transition-colors" onclick="this.closest('tr').remove(); PTW.updateApprovalNumbers('manual-approvals-list')" title="حذف"><i class="fas fa-trash-alt"></i></button></td>
+            `;
+            tbody.appendChild(newRow);
+        });
+
+        // معالجة إضافة اعتماد إغلاق جديد (تصميم جدول)
+        modal.querySelector('#manual-add-closure-approval-btn')?.addEventListener('click', () => {
+            const tbody = modal.querySelector('#manual-closure-approvals-list');
+            const count = tbody.querySelectorAll('tr').length + 1;
+            const newRow = document.createElement('tr');
+            newRow.className = 'manual-closure-approval-row border-b border-gray-100 hover:bg-cyan-50 transition-colors';
+            newRow.innerHTML = `
+                <td class="p-2 text-center font-bold text-cyan-700">${count}</td>
+                <td class="p-2"><input type="text" class="form-input text-sm manual-closure-approval-role" placeholder="الدور / المسمى" value=""></td>
+                <td class="p-2"><input type="text" class="form-input text-sm manual-closure-approval-name" placeholder="اسم المعتمد" value=""></td>
+                <td class="p-2"><input type="datetime-local" class="form-input text-sm manual-closure-approval-date" value=""></td>
+                <td class="p-2"><input type="text" class="form-input text-sm manual-closure-approval-notes" placeholder="ملاحظات" value=""></td>
+                <td class="p-2 text-center"><button type="button" class="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-full transition-colors" onclick="this.closest('tr').remove(); PTW.updateApprovalNumbers('manual-closure-approvals-list')" title="حذف"><i class="fas fa-trash-alt"></i></button></td>
+            `;
+            tbody.appendChild(newRow);
+        });
+
         // معالجة حفظ النموذج
         modal.querySelector('#manual-permit-form')?.addEventListener('submit', async (event) => {
             event.preventDefault();
+            
+            // التحقق من اختيار حالة التصريح
+            const selectedStatus = modal.querySelector('input[name="manual-permit-status-radio"]:checked');
+            if (!selectedStatus) {
+                Notification.warning('يرجى اختيار حالة التصريح');
+                return;
+            }
+            
             await this.saveManualPermitEntry(modal, entryId);
         });
     },
@@ -6016,36 +6510,144 @@ const PTW = {
                 return;
             }
 
+            // الحصول على وقت البدء والانتهاء
+            const timeFromValue = modal.querySelector('#manual-permit-time-from')?.value;
+            const timeToValue = modal.querySelector('#manual-permit-time-to')?.value;
+            
+            // استخراج التاريخ من وقت البدء إذا لم يكن حقل التاريخ موجوداً
+            const dateValue = modal.querySelector('#manual-permit-date')?.value || 
+                             (timeFromValue ? timeFromValue.split('T')[0] : new Date().toISOString().split('T')[0]);
+            
+            // حساب إجمالي الوقت تلقائياً
+            let calculatedTotalTime = '';
+            if (timeFromValue && timeToValue) {
+                try {
+                    const start = new Date(timeFromValue);
+                    const end = new Date(timeToValue);
+                    const diffMs = end - start;
+                    if (diffMs >= 0) {
+                        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                        const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                        if (diffHours === 0) {
+                            calculatedTotalTime = `${diffMinutes} دقيقة`;
+                        } else if (diffMinutes === 0) {
+                            calculatedTotalTime = `${diffHours} ساعة`;
+                        } else {
+                            calculatedTotalTime = `${diffHours} ساعة و ${diffMinutes} دقيقة`;
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+            }
+
+            // جمع بيانات القائمين بالعمل
+            const teamMembers = Array.from(modal.querySelectorAll('#manual-team-members-list .flex')).map(row => ({
+                name: row.querySelector('.manual-team-member-name')?.value.trim() || '',
+                id: row.querySelector('.manual-team-member-id')?.value.trim() || ''
+            })).filter(m => m.name);
+
+            // جمع بيانات طبيعة الأعمال
+            const hotWorkDetails = Array.from(modal.querySelectorAll('input[name="manual-hot-work"]:checked')).map(cb => cb.value);
+            const confinedSpaceDetails = Array.from(modal.querySelectorAll('input[name="manual-confined-space"]:checked')).map(cb => cb.value);
+            const heightWorkDetails = Array.from(modal.querySelectorAll('input[name="manual-height-work"]:checked')).map(cb => cb.value);
+
+            // جمع بيانات الاعتمادات اليدوية
+            const manualApprovals = Array.from(modal.querySelectorAll('.manual-approval-row')).map(row => ({
+                role: row.querySelector('.manual-approval-role')?.value.trim() || '',
+                name: row.querySelector('.manual-approval-name')?.value.trim() || '',
+                date: row.querySelector('.manual-approval-date')?.value || '',
+                notes: row.querySelector('.manual-approval-notes')?.value.trim() || ''
+            })).filter(a => a.role || a.name);
+
+            // جمع بيانات اعتمادات الإغلاق
+            const manualClosureApprovals = Array.from(modal.querySelectorAll('.manual-closure-approval-row')).map(row => ({
+                role: row.querySelector('.manual-closure-approval-role')?.value.trim() || '',
+                name: row.querySelector('.manual-closure-approval-name')?.value.trim() || '',
+                date: row.querySelector('.manual-closure-approval-date')?.value || '',
+                notes: row.querySelector('.manual-closure-approval-notes')?.value.trim() || ''
+            })).filter(a => a.role || a.name);
+
+            // تحديد أنواع التصريح بناءً على طبيعة الأعمال المحددة
+            const derivedPermitTypes = [];
+            if (hotWorkDetails.length > 0) derivedPermitTypes.push('أعمال ساخنة');
+            if (confinedSpaceDetails.length > 0) derivedPermitTypes.push('أعمال في الأماكن المغلقة');
+            if (heightWorkDetails.length > 0) derivedPermitTypes.push('أعمال في الارتفاعات');
+            if (modal.querySelector('#manual-electrical-work-type')?.value.trim()) derivedPermitTypes.push('أعمال كهربائية');
+            if (modal.querySelector('#manual-cold-work-type')?.value.trim()) derivedPermitTypes.push('أعمال باردة');
+            if (modal.querySelector('#manual-other-work-type')?.value.trim()) derivedPermitTypes.push('أعمال أخرى');
+            
+            // إذا لم يتم تحديد أي نوع، استخدم "أعمال أخرى"
+            const finalPermitTypes = derivedPermitTypes.length > 0 ? derivedPermitTypes : ['أعمال أخرى'];
+
             const formData = {
                 sequentialNumber: parseInt(modal.querySelector('#manual-permit-sequential')?.value || '0'),
-                date: modal.querySelector('#manual-permit-date')?.value,
-                permitType: selectedPermitTypes, // مصفوفة من الأنواع
-                permitTypeDisplay: selectedPermitTypes.join('، '), // نص للعرض
-                requestingParty: modal.querySelector('#manual-permit-requesting-party')?.value.trim(),
+                date: dateValue,
+                permitType: finalPermitTypes,
+                permitTypeDisplay: finalPermitTypes.join('، '),
+                requestingParty: modal.querySelector('#manual-permit-requesting-party')?.value.trim() || '',
                 locationId: locationId,
                 location: locationName,
                 sublocationId: sublocationId,
                 sublocation: sublocationName,
-                timeFrom: modal.querySelector('#manual-permit-time-from')?.value,
-                timeTo: modal.querySelector('#manual-permit-time-to')?.value,
-                totalTime: modal.querySelector('#manual-permit-total-time')?.value,
-                authorizedParty: modal.querySelector('#manual-permit-authorized-party')?.value.trim(),
-                workDescription: modal.querySelector('#manual-permit-work-description')?.value.trim(),
-                supervisor1: modal.querySelector('#manual-permit-supervisor1')?.value.trim(),
-                supervisor2: modal.querySelector('#manual-permit-supervisor2')?.value.trim(),
-                status: modal.querySelector('#manual-permit-status')?.value
+                timeFrom: timeFromValue,
+                timeTo: timeToValue,
+                totalTime: modal.querySelector('#manual-permit-total-time')?.value || calculatedTotalTime,
+                authorizedParty: modal.querySelector('#manual-permit-authorized-party')?.value.trim() || '',
+                workDescription: modal.querySelector('#manual-permit-work-description')?.value.trim() || '',
+                supervisor1: modal.querySelector('#manual-permit-supervisor1')?.value.trim() || '',
+                supervisor2: modal.querySelector('#manual-permit-supervisor2')?.value.trim() || '',
+                status: modal.querySelector('#manual-permit-status')?.value || '',
+                // الحقول الجديدة
+                equipment: modal.querySelector('#manual-permit-equipment')?.value.trim() || '',
+                tools: modal.querySelector('#manual-permit-tools')?.value.trim() || '',
+                teamMembers: teamMembers,
+                // طبيعة الأعمال
+                hotWorkDetails: hotWorkDetails,
+                hotWorkOther: modal.querySelector('#manual-hot-work-other')?.value.trim() || '',
+                confinedSpaceDetails: confinedSpaceDetails,
+                confinedSpaceOther: modal.querySelector('#manual-confined-space-other')?.value.trim() || '',
+                heightWorkDetails: heightWorkDetails,
+                heightWorkOther: modal.querySelector('#manual-height-work-other')?.value.trim() || '',
+                electricalWorkType: modal.querySelector('#manual-electrical-work-type')?.value.trim() || '',
+                coldWorkType: modal.querySelector('#manual-cold-work-type')?.value.trim() || '',
+                otherWorkType: modal.querySelector('#manual-other-work-type')?.value.trim() || '',
+                // بيانات الحفر
+                excavationLength: modal.querySelector('#manual-excavation-length')?.value.trim() || '',
+                excavationWidth: modal.querySelector('#manual-excavation-width')?.value.trim() || '',
+                excavationDepth: modal.querySelector('#manual-excavation-depth')?.value.trim() || '',
+                soilType: modal.querySelector('#manual-excavation-soil')?.value.trim() || '',
+                // المتطلبات والمرفقات
+                preStartChecklist: modal.querySelector('#manual-permit-preStartChecklist')?.checked || false,
+                lotoApplied: modal.querySelector('#manual-permit-lotoApplied')?.checked || false,
+                governmentPermits: modal.querySelector('#manual-permit-governmentPermits')?.checked || false,
+                riskAssessmentAttached: modal.querySelector('#manual-permit-riskAssessmentAttached')?.checked || false,
+                gasTesting: modal.querySelector('#manual-permit-gasTesting')?.checked || false,
+                mocRequest: modal.querySelector('#manual-permit-mocRequest')?.checked || false,
+                // مهمات الوقاية
+                ppeNotes: modal.querySelector('#manual-ppe-notes')?.value.trim() || '',
+                // تقييم المخاطر - تسجيل كنص
+                riskLikelihood: modal.querySelector('#manual-risk-likelihood')?.value || '',
+                riskConsequence: modal.querySelector('#manual-risk-consequence')?.value || '',
+                riskScore: modal.querySelector('#manual-risk-score')?.value || '',
+                riskLevel: modal.querySelector('#manual-risk-level')?.value || '',
+                riskNotes: modal.querySelector('#manual-risk-notes')?.value.trim() || '',
+                // الاعتمادات اليدوية - تحويل إلى نص للتخزين
+                manualApprovalsText: manualApprovals.map(a => `${a.role}: ${a.name} (${a.date || 'بدون تاريخ'}) ${a.notes ? '- ' + a.notes : ''}`).join(' | '),
+                manualClosureApprovalsText: manualClosureApprovals.map(a => `${a.role}: ${a.name} (${a.date || 'بدون تاريخ'}) ${a.notes ? '- ' + a.notes : ''}`).join(' | '),
+                // الاحتفاظ بالمصفوفات للتحرير
+                manualApprovals: manualApprovals,
+                manualClosureApprovals: manualClosureApprovals,
+                // بيانات الإغلاق
+                closureTime: modal.querySelector('#manual-closure-time')?.value || '',
+                closureReason: modal.querySelector('#manual-closure-reason')?.value.trim() || ''
             };
 
-            // التحقق من البيانات المطلوبة
-            if (!formData.date || !formData.permitType || !Array.isArray(formData.permitType) || formData.permitType.length === 0 ||
-                !formData.requestingParty || !formData.locationId || !formData.location ||
-                !formData.timeFrom || !formData.timeTo || !formData.authorizedParty || !formData.workDescription || !formData.status) {
-                Notification.warning('يرجى إدخال جميع الحقول المطلوبة');
+            // التحقق من البيانات المطلوبة (تخفيف الشروط للإدخال اليدوي)
+            if (!formData.locationId || !formData.location || !formData.timeFrom || !formData.timeTo || !formData.workDescription || !formData.status) {
+                Notification.warning('يرجى إدخال الحقول المطلوبة: الموقع، تاريخ البدء والانتهاء، وصف العمل، وحالة التصريح');
                 return;
             }
 
             // تحويل التاريخ والوقت إلى ISO format
-            // ✅ إصلاح: استخدام تحويل صحيح لـ datetime-local
             const openDate = formData.date ? new Date(formData.date).toISOString() : new Date().toISOString();
             const timeFromISO = Utils.dateTimeLocalToISO(formData.timeFrom) || new Date().toISOString();
             const timeToISO = Utils.dateTimeLocalToISO(formData.timeTo) || new Date().toISOString();
@@ -6060,6 +6662,77 @@ const PTW = {
                 ? `${formData.location} - ${formData.sublocation}`
                 : formData.location;
 
+            // بناء كائن البيانات الكامل
+            const fullEntryData = {
+                sequentialNumber: sequentialNumber,
+                openDate: openDate,
+                permitType: formData.permitType,
+                permitTypeDisplay: formData.permitTypeDisplay,
+                requestingParty: formData.requestingParty,
+                locationId: formData.locationId,
+                location: fullLocationText,
+                sublocationId: formData.sublocationId,
+                sublocation: formData.sublocation,
+                timeFrom: timeFromISO,
+                timeTo: timeToISO,
+                totalTime: formData.totalTime || this.calculateTotalTime(timeFromISO, timeToISO),
+                authorizedParty: formData.authorizedParty,
+                workDescription: formData.workDescription,
+                supervisor1: formData.supervisor1 || '',
+                supervisor2: formData.supervisor2 || '',
+                status: formData.status,
+                // الحقول الجديدة
+                equipment: formData.equipment,
+                tools: formData.tools,
+                toolsList: formData.tools,
+                teamMembers: formData.teamMembers,
+                // طبيعة الأعمال
+                hotWorkDetails: formData.hotWorkDetails,
+                hotWorkOther: formData.hotWorkOther,
+                confinedSpaceDetails: formData.confinedSpaceDetails,
+                confinedSpaceOther: formData.confinedSpaceOther,
+                heightWorkDetails: formData.heightWorkDetails,
+                heightWorkOther: formData.heightWorkOther,
+                electricalWorkType: formData.electricalWorkType,
+                coldWorkType: formData.coldWorkType,
+                otherWorkType: formData.otherWorkType,
+                // بيانات الحفر
+                excavationLength: formData.excavationLength,
+                excavationWidth: formData.excavationWidth,
+                excavationDepth: formData.excavationDepth,
+                soilType: formData.soilType,
+                // المتطلبات والمرفقات
+                preStartChecklist: formData.preStartChecklist,
+                lotoApplied: formData.lotoApplied,
+                governmentPermits: formData.governmentPermits,
+                riskAssessmentAttached: formData.riskAssessmentAttached,
+                gasTesting: formData.gasTesting,
+                mocRequest: formData.mocRequest,
+                // مهمات الوقاية
+                ppeNotes: formData.ppeNotes,
+                requiredPPE: formData.ppeNotes ? formData.ppeNotes.split('،').map(s => s.trim()).filter(Boolean) : [],
+                // تقييم المخاطر - حقول نصية
+                riskLikelihood: formData.riskLikelihood,
+                riskConsequence: formData.riskConsequence,
+                riskScore: formData.riskScore,
+                riskLevel: formData.riskLevel,
+                riskNotes: formData.riskNotes,
+                // الاعتمادات اليدوية - نص للتخزين
+                manualApprovalsText: formData.manualApprovalsText,
+                manualClosureApprovalsText: formData.manualClosureApprovalsText,
+                // الاحتفاظ بالمصفوفات للتحرير
+                manualApprovals: formData.manualApprovals,
+                manualClosureApprovals: formData.manualClosureApprovals,
+                // تحويل بيانات فريق العمل إلى نص
+                teamMembersText: formData.teamMembers.map(m => `${m.name}${m.id ? ' (' + m.id + ')' : ''}`).join('، '),
+                // بيانات الإغلاق
+                closureDate: formData.closureTime ? Utils.dateTimeLocalToISO(formData.closureTime) : (formData.status === 'اكتمل العمل بشكل آمن' || formData.status === 'إغلاق جبري' ? timeToISO : null),
+                closureReason: formData.closureReason || (formData.status === 'إغلاق جبري' ? 'إغلاق جبري' : ''),
+                // علامة التصريح اليدوي
+                isManualEntry: true,
+                updatedAt: new Date().toISOString()
+            };
+
             // إنشاء أو تحديث السجل
             let entry;
             if (entryId) {
@@ -6070,64 +6743,20 @@ const PTW = {
                     return;
                 }
                 
-                // دمج البيانات الجديدة مع البيانات الموجودة (الحفاظ على جميع الحقول)
                 entry = {
-                    ...existingEntry, // الحفاظ على جميع الحقول الموجودة
-                    // تحديث الحقول من النموذج
-                    sequentialNumber: sequentialNumber,
-                    permitId: existingEntry.permitId || Utils.generateSequentialId('PTW', AppState.appData?.ptw || []), // الحفاظ على permitId الموجود
-                    openDate: openDate,
-                    permitType: formData.permitType,
-                    permitTypeDisplay: formData.permitTypeDisplay,
-                    requestingParty: formData.requestingParty,
-                    locationId: formData.locationId,
-                    location: fullLocationText,
-                    sublocationId: formData.sublocationId,
-                    sublocation: formData.sublocation,
-                    timeFrom: timeFromISO,
-                    timeTo: timeToISO,
-                    totalTime: formData.totalTime || this.calculateTotalTime(timeFromISO, timeToISO),
-                    authorizedParty: formData.authorizedParty,
-                    workDescription: formData.workDescription,
-                    supervisor1: formData.supervisor1 || 'غير محدد',
-                    supervisor2: formData.supervisor2 || 'غير محدد',
-                    status: formData.status,
-                    // تحديث closureDate بناءً على الحالة: إذا كانت الحالة تشير إلى إغلاق، قم بتحديثها، وإلا احتفظ بالقيمة الموجودة
-                    closureDate: (formData.status === 'اكتمل العمل بشكل آمن' || formData.status === 'إغلاق جبري' || formData.status === 'مغلق') 
-                        ? timeToISO 
-                        : (existingEntry.closureDate || null),
-                    closureReason: formData.status === 'إغلاق جبري' 
-                        ? 'إغلاق جبري' 
-                        : (existingEntry.closureReason || null),
-                    createdAt: existingEntry.createdAt, // الحفاظ على تاريخ الإنشاء الأصلي
-                    updatedAt: new Date().toISOString()
+                    ...existingEntry,
+                    ...fullEntryData,
+                    id: existingEntry.id,
+                    permitId: existingEntry.permitId || Utils.generateSequentialId('PTW', AppState.appData?.ptw || []),
+                    createdAt: existingEntry.createdAt
                 };
             } else {
                 // عند الإضافة: إنشاء سجل جديد
                 entry = {
+                    ...fullEntryData,
                     id: Utils.generateSequentialId('REG', this.registryData || []),
-                    sequentialNumber: sequentialNumber,
                     permitId: Utils.generateSequentialId('PTW', AppState.appData?.ptw || []),
-                    openDate: openDate,
-                    permitType: formData.permitType,
-                    permitTypeDisplay: formData.permitTypeDisplay,
-                    requestingParty: formData.requestingParty,
-                    locationId: formData.locationId,
-                    location: fullLocationText,
-                    sublocationId: formData.sublocationId,
-                    sublocation: formData.sublocation,
-                    timeFrom: timeFromISO,
-                    timeTo: timeToISO,
-                    totalTime: formData.totalTime || this.calculateTotalTime(timeFromISO, timeToISO),
-                    authorizedParty: formData.authorizedParty,
-                    workDescription: formData.workDescription,
-                    supervisor1: formData.supervisor1 || 'غير محدد',
-                    supervisor2: formData.supervisor2 || 'غير محدد',
-                    status: formData.status,
-                    closureDate: formData.status === 'اكتمل العمل بشكل آمن' || formData.status === 'إغلاق جبري' ? timeToISO : null,
-                    closureReason: formData.status === 'إغلاق جبري' ? 'إغلاق جبري' : null,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
+                    createdAt: new Date().toISOString()
                 };
             }
 

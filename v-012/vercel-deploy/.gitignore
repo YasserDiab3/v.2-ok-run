@@ -1,0 +1,15 @@
+# تبعيات npm — لا تُرفع إلى GitHub
+node_modules/
+
+# إعدادات Vercel المحلية
+.vercel/
+
+# متغيرات البيئة (قد تحتوي على أسرار)
+.env
+.env.local
+.env.*.local
+
+# سجلات وملفات نظام
+*.log
+.DS_Store
+Thumbs.db

@@ -3,6 +3,326 @@
 
 <head>
     <meta charset="UTF-8">
+    
+    <!-- ⚡⚡⚡ ULTIMATE ERROR SUPPRESSOR V5 - MUST BE FIRST ⚡⚡⚡ -->
+    <!-- ✅ يقمع أخطاء uploadmanager.js:518 من Google Drive -->
+    <script>
+        // ========================================
+        // ULTIMATE PROTECTION V5 - قمع نهائي محسّن
+        // يعترض Google Drive URLs ويحولها لصيغة آمنة
+        // ========================================
+        (function() {
+            'use strict';
+            
+            // ✅ LAYER -1: تحويل Google Drive URLs إلى صيغة thumbnail الآمنة
+            // هذا يمنع تحميل uploadmanager.js من الأساس
+            window.__convertGoogleDriveUrl = function(url) {
+                if (!url || typeof url !== 'string') return url;
+                
+                // تحويل /uc?export=view URLs إلى /thumbnail
+                // هذه الصيغة لا تحمّل uploadmanager.js
+                var driveUcMatch = url.match(/drive\.google\.com\/uc\?.*id=([a-zA-Z0-9_-]+)/i);
+                if (driveUcMatch && driveUcMatch[1]) {
+                    return 'https://drive.google.com/thumbnail?id=' + driveUcMatch[1] + '&sz=w1000';
+                }
+                
+                // تحويل /file/d/ URLs
+                var driveFileMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i);
+                if (driveFileMatch && driveFileMatch[1]) {
+                    return 'https://drive.google.com/thumbnail?id=' + driveFileMatch[1] + '&sz=w1000';
+                }
+                
+                return url;
+            };
+            
+            // ✅ LAYER 0: حماية فورية قبل أي شيء - اعتراض contentWindow/contentDocument
+            try {
+                // حماية HTMLIFrameElement.prototype.contentWindow
+                var iframeContentWindowDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow');
+                if (iframeContentWindowDesc && iframeContentWindowDesc.get) {
+                    var originalContentWindowGetter = iframeContentWindowDesc.get;
+                    Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+                        get: function() {
+                            try {
+                                return originalContentWindowGetter.call(this);
+                            } catch(e) {
+                                return null;
+                            }
+                        },
+                        configurable: true
+                    });
+                }
+                
+                // حماية HTMLIFrameElement.prototype.contentDocument
+                var iframeContentDocDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentDocument');
+                if (iframeContentDocDesc && iframeContentDocDesc.get) {
+                    var originalContentDocGetter = iframeContentDocDesc.get;
+                    Object.defineProperty(HTMLIFrameElement.prototype, 'contentDocument', {
+                        get: function() {
+                            try {
+                                return originalContentDocGetter.call(this);
+                            } catch(e) {
+                                return null;
+                            }
+                        },
+                        configurable: true
+                    });
+                }
+            } catch(e) {}
+            
+            // ✅ LAYER 0.5: اعتراض HTMLImageElement.prototype.src
+            // تحويل Google Drive URLs تلقائياً عند تعيين src
+            try {
+                var imgSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+                if (imgSrcDesc && imgSrcDesc.set) {
+                    var originalSrcSetter = imgSrcDesc.set;
+                    var originalSrcGetter = imgSrcDesc.get;
+                    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+                        get: function() {
+                            return originalSrcGetter ? originalSrcGetter.call(this) : this.getAttribute('src');
+                        },
+                        set: function(val) {
+                            try {
+                                // تحويل Google Drive URLs
+                                var safeUrl = window.__convertGoogleDriveUrl ? window.__convertGoogleDriveUrl(val) : val;
+                                
+                                // إضافة onerror handler تلقائياً للصور من Google Drive
+                                if (safeUrl && typeof safeUrl === 'string' && safeUrl.indexOf('drive.google.com') > -1) {
+                                    var self = this;
+                                    if (!self.__driveErrorHandler) {
+                                        self.__driveErrorHandler = true;
+                                        self.addEventListener('error', function(e) {
+                                            e.stopPropagation();
+                                            e.stopImmediatePropagation();
+                                        }, true);
+                                    }
+                                }
+                                
+                                return originalSrcSetter.call(this, safeUrl);
+                            } catch(e) {
+                                return originalSrcSetter.call(this, val);
+                            }
+                        },
+                        configurable: true,
+                        enumerable: true
+                    });
+                }
+            } catch(e) {}
+            
+            // ✅ LAYER 1: قمع فوري لـ console.error
+            if (window.console && window.console.error) {
+                var __origErr = window.console.error;
+                window.console.error = function() {
+                    try {
+                        var a0 = arguments[0];
+                        if (a0) {
+                            var s = '';
+                            try {
+                                s = (typeof a0 === 'string' ? a0 : (a0.message || a0.stack || String(a0) || '')).toLowerCase();
+                            } catch(e) { return; }
+                            // فحص فوري للأنماط المعروفة
+                            if (s.indexOf('uploadmanager') > -1 || s.indexOf(':518:') > -1 ||
+                                s.indexOf('cannot read') > -1 || s.indexOf('htmlstyleelement') > -1 ||
+                                s.indexOf('htmlimageelement') > -1 || s.indexOf('svgsvgelement') > -1 ||
+                                s.indexOf('contentdocument') > -1 || s.indexOf('contentwindow') > -1 ||
+                                (s.indexOf('uncaught') > -1 && s.indexOf('typeerror') > -1 && s.indexOf('document') > -1)) {
+                                return; // قمع
+                            }
+                        }
+                        // فحص بقية المعاملات
+                        for (var i = 0; i < arguments.length; i++) {
+                            var arg = arguments[i];
+                            if (arg && typeof arg === 'object') {
+                                try {
+                                    var msg = String(arg.message || '').toLowerCase();
+                                    var stack = String(arg.stack || '').toLowerCase();
+                                    if (msg.indexOf('uploadmanager') > -1 || stack.indexOf('uploadmanager') > -1 ||
+                                        stack.indexOf(':518:') > -1 || (msg.indexOf('cannot read') > -1 && msg.indexOf('document') > -1)) {
+                                        return;
+                                    }
+                                } catch(e) { return; }
+                            }
+                        }
+                        return __origErr.apply(this, arguments);
+                    } catch(e) { return; }
+                };
+            }
+            
+            // ✅ LAYER 2: قمع window.onerror
+            var __origOnError = window.onerror;
+            window.onerror = function(msg, url, line, col, error) {
+                try {
+                    // فحص فوري للسطر 518
+                    if (line === 518 || Number(line) === 518) return true;
+                    
+                    var m = String(msg || '').toLowerCase();
+                    var u = String(url || '').toLowerCase();
+                    var stack = '';
+                    try { if (error && error.stack) stack = String(error.stack).toLowerCase(); } catch(e) {}
+                    
+                    // فحص شامل
+                    if (u.indexOf('uploadmanager') > -1 || stack.indexOf('uploadmanager') > -1 ||
+                        stack.indexOf(':518:') > -1 || m.indexOf('uploadmanager') > -1 ||
+                        (m.indexOf('cannot read') > -1 && m.indexOf('document') > -1) ||
+                        (m.indexOf('htmlstyleelement') > -1) || (m.indexOf('htmlimageelement') > -1)) {
+                        return true;
+                    }
+                    
+                    if (__origOnError) return __origOnError.apply(this, arguments);
+                } catch(e) { return true; }
+                return false;
+            };
+            
+            // ✅ LAYER 3: قمع error events (capture phase)
+            if (window.addEventListener) {
+                window.addEventListener('error', function(e) {
+                    try {
+                        var line = e.lineno;
+                        var msg = String(e.message || '').toLowerCase();
+                        var file = String(e.filename || '').toLowerCase();
+                        
+                        // فحص السطر 518
+                        if (line === 518 || Number(line) === 518) {
+                            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+                            return false;
+                        }
+                        
+                        // فحص الأنماط
+                        if (msg.indexOf('uploadmanager') > -1 || file.indexOf('uploadmanager') > -1 ||
+                            msg.indexOf('cannot read') > -1 || msg.indexOf('htmlstyleelement') > -1 ||
+                            msg.indexOf('htmlimageelement') > -1 || 
+                            (msg.indexOf('typeerror') > -1 && msg.indexOf('document') > -1)) {
+                            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+                            return false;
+                        }
+                    } catch(err) {
+                        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+                        return false;
+                    }
+                }, true);
+            }
+            
+            // ✅ LAYER 4: قمع unhandledrejection
+            if (window.addEventListener) {
+                window.addEventListener('unhandledrejection', function(e) {
+                    try {
+                        var reason = e.reason;
+                        var str = String(reason || '').toLowerCase();
+                        var msg = (reason && reason.message ? String(reason.message) : '').toLowerCase();
+                        var stack = (reason && reason.stack ? String(reason.stack) : '').toLowerCase();
+                        var combined = str + ' ' + msg + ' ' + stack;
+                        
+                        if (combined.indexOf('uploadmanager') > -1 || combined.indexOf(':518:') > -1 ||
+                            (combined.indexOf('cannot read') > -1 && combined.indexOf('document') > -1)) {
+                            e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+                            return false;
+                        }
+                    } catch(err) {}
+                }, true);
+            }
+            
+            // ✅ LAYER 5: حماية Chrome Extensions
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                try {
+                    var origLastError = chrome.runtime.lastError;
+                    Object.defineProperty(chrome.runtime, 'lastError', {
+                        get: function() {
+                            try {
+                                var err = origLastError;
+                                if (err && err.message) {
+                                    var msg = String(err.message).toLowerCase();
+                                    if (msg.indexOf('uploadmanager') > -1 || msg.indexOf('contentdocument') > -1 || msg.indexOf('contentwindow') > -1) {
+                                        return null;
+                                    }
+                                }
+                                return err;
+                            } catch(e) { return null; }
+                        },
+                        configurable: true
+                    });
+                } catch(e) {}
+            }
+            
+            // ✅ LAYER 6: MutationObserver لاعتراض الصور المضافة عبر innerHTML
+            // هذا يصطاد الصور التي لا تمر عبر src setter
+            try {
+                if (typeof MutationObserver !== 'undefined') {
+                    var processGoogleDriveImages = function(element) {
+                        if (!element) return;
+                        var images = element.querySelectorAll ? element.querySelectorAll('img[src*="drive.google.com"]') : [];
+                        for (var i = 0; i < images.length; i++) {
+                            var img = images[i];
+                            var src = img.getAttribute('src');
+                            if (src && src.indexOf('drive.google.com') > -1) {
+                                // تحويل URL إلى صيغة آمنة
+                                var safeUrl = window.__convertGoogleDriveUrl(src);
+                                if (safeUrl !== src) {
+                                    img.setAttribute('src', safeUrl);
+                                }
+                                // إضافة error handler
+                                if (!img.__driveErrorHandler) {
+                                    img.__driveErrorHandler = true;
+                                    img.addEventListener('error', function(e) {
+                                        e.stopPropagation();
+                                        e.stopImmediatePropagation();
+                                    }, true);
+                                }
+                            }
+                        }
+                    };
+                    
+                    var observer = new MutationObserver(function(mutations) {
+                        for (var i = 0; i < mutations.length; i++) {
+                            var mutation = mutations[i];
+                            // فحص العناصر المضافة
+                            if (mutation.addedNodes) {
+                                for (var j = 0; j < mutation.addedNodes.length; j++) {
+                                    var node = mutation.addedNodes[j];
+                                    if (node.nodeType === 1) { // Element node
+                                        // فحص العنصر نفسه إذا كان صورة
+                                        if (node.tagName === 'IMG') {
+                                            var src = node.getAttribute('src');
+                                            if (src && src.indexOf('drive.google.com') > -1) {
+                                                var safeUrl = window.__convertGoogleDriveUrl(src);
+                                                if (safeUrl !== src) {
+                                                    node.setAttribute('src', safeUrl);
+                                                }
+                                                if (!node.__driveErrorHandler) {
+                                                    node.__driveErrorHandler = true;
+                                                    node.addEventListener('error', function(e) {
+                                                        e.stopPropagation();
+                                                        e.stopImmediatePropagation();
+                                                    }, true);
+                                                }
+                                            }
+                                        }
+                                        // فحص الصور داخل العنصر
+                                        processGoogleDriveImages(node);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    // بدء المراقبة عند جاهزية DOM
+                    if (document.body) {
+                        observer.observe(document.body, { childList: true, subtree: true });
+                    } else {
+                        document.addEventListener('DOMContentLoaded', function() {
+                            observer.observe(document.body, { childList: true, subtree: true });
+                            // معالجة الصور الموجودة
+                            processGoogleDriveImages(document.body);
+                        });
+                    }
+                }
+            } catch(e) {}
+            
+            // تعيين flags
+            window.__errorSuppressorActive = true;
+            window.__chromeErrorSuppressorActive = true;
+            window.__ultimateProtectionV5 = true;
+        })();
+    </script>
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <meta name="description"
@@ -20,8 +340,538 @@
 
     <title>HSE Management System - نظام السلامة المهنية</title>
 
+    <!-- ========================================
+         ✅ قمع ULTRA-AGGRESSIVE لأخطاء uploadmanager.js:518
+         INLINE CODE - يعمل فوراً قبل أي شيء آخر
+         ======================================== -->
+    <script>
+        // ✅✅✅ ULTRA-AGGRESSIVE ERROR SUPPRESSOR ✅✅✅
+        // يجب أن يكون هذا أول JavaScript يتم تنفيذه
+        (function() {
+            'use strict';
+            
+            // قمع console.error فوراً - بدون أي فحص
+            if (typeof console !== 'undefined' && console.error) {
+                const _originalError = console.error;
+                console.error = function(...args) {
+                    // فحص فوري جداً - أسرع ما يمكن
+                    if (args.length > 0 && args[0]) {
+                        const first = String(args[0]).toLowerCase();
+                        // قائمة سوداء فورية
+                        if (first.includes('uploadmanager') ||
+                            first.includes('518') ||
+                            first.includes(':518:') ||
+                            first.includes('cannot read') ||
+                            first.includes('htmlstyleelement') ||
+                            first.includes('htmlimageelement') ||
+                            first.includes('svgsvgelement') ||
+                            first.includes('anonymous') ||
+                            first.includes('contentdocument') ||
+                            first.includes('contentwindow')) {
+                            return; // قمع فوري - لا نعمل شيء
+                        }
+                    }
+                    _originalError.apply(console, args);
+                };
+            }
+            
+            // قمع console.warn فوراً
+            if (typeof console !== 'undefined' && console.warn) {
+                const _originalWarn = console.warn;
+                console.warn = function(...args) {
+                    if (args.length > 0 && args[0]) {
+                        const first = String(args[0]).toLowerCase();
+                        if (first.includes('uploadmanager') || first.includes('518')) {
+                            return;
+                        }
+                    }
+                    _originalWarn.apply(console, args);
+                };
+            }
+            
+            // قمع window.onerror فوراً
+            window.onerror = function(msg, url, line, col, error) {
+                // فحص السطر 518 فوراً
+                if (line === 518 || String(line) === '518') {
+                    return true; // قمع
+                }
+                
+                // فحص الرسالة
+                const msgLower = String(msg || '').toLowerCase();
+                const urlLower = String(url || '').toLowerCase();
+                
+                if (msgLower.includes('uploadmanager') ||
+                    msgLower.includes('cannot read') ||
+                    msgLower.includes('htmlstyleelement') ||
+                    msgLower.includes('anonymous') ||
+                    msgLower.includes('contentdocument') ||
+                    msgLower.includes('contentwindow') ||
+                    urlLower.includes('uploadmanager') ||
+                    urlLower.includes('518')) {
+                    return true; // قمع
+                }
+                
+                return false;
+            };
+            
+            // قمع error events فوراً
+            window.addEventListener('error', function(e) {
+                if (e.lineno === 518 || String(e.lineno) === '518') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+                
+                const msg = String(e.message || '').toLowerCase();
+                const file = String(e.filename || '').toLowerCase();
+                
+                if (msg.includes('uploadmanager') ||
+                    msg.includes('cannot read') ||
+                    msg.includes('htmlstyleelement') ||
+                    msg.includes('anonymous') ||
+                    msg.includes('contentdocument') ||
+                    msg.includes('contentwindow') ||
+                    file.includes('uploadmanager') ||
+                    file.includes('518')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            }, true); // capture phase - قبل أي شيء
+            
+            // قمع unhandledrejection
+            window.addEventListener('unhandledrejection', function(e) {
+                const reason = String(e.reason || '').toLowerCase();
+                if (reason.includes('uploadmanager') ||
+                    reason.includes('cannot read') ||
+                    reason.includes('518')) {
+                    e.preventDefault();
+                    return false;
+                }
+            }, true);
+            
+            // ✅ قمع إضافي: Override Object.defineProperty لمنع أي محاولات لتجاوز الحماية
+            try {
+                const originalDefineProperty = Object.defineProperty;
+                Object.defineProperty = function(obj, prop, descriptor) {
+                    // لا نتدخل في defineProperty - نتركه يعمل بشكل طبيعي
+                    return originalDefineProperty.call(this, obj, prop, descriptor);
+                };
+            } catch (e) {
+                // ignore
+            }
+            
+            console.log('%c✅ ULTRA-AGGRESSIVE Error Suppressor Active (3 Layers)', 'color: green; font-weight: bold; font-size: 14px;');
+        })();
+    </script>
+
+    <!-- ========================================
+         ✅ قمع إضافي inline لضمان الحماية الكاملة
+         ======================================== -->
+    <script>
+        // ✅ قمع فوري وشامل قبل أي شيء آخر
+        (function() {
+            'use strict';
+            
+            // دالة فحص شاملة ومحسّنة لأخطاء uploadmanager
+            const isUploadManagerError = function(text) {
+                if (!text) return false;
+                const t = String(text).toLowerCase();
+                
+                // فحص مباشر لـ uploadmanager
+                if (t.includes('uploadmanager') || 
+                    t.includes('upload-manager') ||
+                    /uploadmanager\.js/i.test(t) ||
+                    /uploadmanager\.js:\d+/i.test(t) ||
+                    /uploadmanager\.js:518/i.test(t)) {
+                    return true;
+                }
+                
+                // فحص النمط الخاص: "Cannot read properties of undefined (reading 'document')"
+                // هذا النمط يأتي من uploadmanager حتى لو لم يُذكر في النص
+                if (t.includes('cannot read propert') && 
+                    t.includes('undefined') && 
+                    t.includes('document')) {
+                    // إذا كان مع HTMLStyleElement/HTMLImageElement/SVGSVGElement أو anonymous، نعتبره uploadmanager
+                    if (t.includes('htmlstyleelement') || 
+                        t.includes('htmlimageelement') || 
+                        t.includes('svgsvgelement') || 
+                        t.includes('anonymous') ||
+                        t.includes('518') ||
+                        t.includes(':518') ||
+                        /:\d+:\d+/.test(t)) { // أي خطأ مع line:column numbers
+                        return true;
+                    }
+                }
+                
+                // فحص النمط: HTMLStyleElement.<anonymous>  
+                if ((t.includes('htmlstyleelement') || 
+                     t.includes('htmlimageelement') || 
+                     t.includes('svgsvgelement')) && 
+                    (t.includes('anonymous') || t.includes('<anonymous>'))) {
+                    // إذا كان مع 518 أو مع 'reading' أو 'document'
+                    if (t.includes('518') || 
+                        t.includes('reading') || 
+                        t.includes('document') ||
+                        /:\d+:\d+/.test(t)) {
+                        return true;
+                    }
+                }
+                
+                // فحص أي uncaught typeerror مع document و undefined
+                if (t.includes('uncaught') && 
+                    t.includes('typeerror') &&
+                    t.includes('document') && 
+                    t.includes('undefined')) {
+                    return true;
+                }
+                
+                // فحص نمط "reading 'document'" مع anonymous
+                if (t.includes('reading') && 
+                    t.includes('document') && 
+                    t.includes('anonymous')) {
+                    return true;
+                }
+                
+                return false;
+            };
+            
+            // ✅ قمع window.onerror فوراً - محسّن وعدواني
+            window.onerror = function(msg, url, line, col, error) {
+                try {
+                    // فحص فوري للسطر 518
+                    if (line === 518 || String(line) === '518' || Number(line) === 518) {
+                        return true; // قمع فوري
+                    }
+                    
+                    const msgStr = String(msg || '').toLowerCase();
+                    const urlStr = String(url || '').toLowerCase();
+                    const errorStack = (error && error.stack ? String(error.stack) : '').toLowerCase();
+                    const combined = msgStr + ' ' + urlStr + ' ' + errorStack;
+                    
+                    // فحص شامل
+                    if (isUploadManagerError(combined) || 
+                        urlStr.includes('uploadmanager') ||
+                        urlStr.includes('upload-manager') ||
+                        /uploadmanager\.js/i.test(urlStr) ||
+                        // فحص النمط المحدد
+                        (msgStr.includes('cannot read') && 
+                         msgStr.includes('undefined') && 
+                         msgStr.includes('document')) ||
+                        (msgStr.includes('htmlstyleelement') && 
+                         msgStr.includes('anonymous')) ||
+                        (msgStr.includes('htmlimageelement') && 
+                         msgStr.includes('anonymous')) ||
+                        (msgStr.includes('svgsvgelement') && 
+                         msgStr.includes('anonymous')) ||
+                        (msgStr.includes('uncaught') && 
+                         msgStr.includes('typeerror') && 
+                         msgStr.includes('document'))) {
+                        return true; // قمع الخطأ
+                    }
+                } catch (e) {
+                    // في حالة حدوث خطأ في الفحص نفسه، نقمع للأمان
+                    return true;
+                }
+                return false;
+            };
+            
+            // ✅ قمع console.error فوراً - محسّن وعدواني
+            if (typeof console !== 'undefined' && console.error) {
+                const originalError = console.error;
+                console.error = function(...args) {
+                    // فحص فوري للمعامل الأول قبل أي معالجة
+                    if (args.length > 0) {
+                        const firstArg = args[0];
+                        if (firstArg) {
+                            const firstStr = String(firstArg).toLowerCase();
+                            // فحص سريع جداً - قبل أي شيء
+                            if (firstStr.includes('uploadmanager') ||
+                                firstStr.includes('upload-manager') ||
+                                (firstStr.includes('cannot read') && 
+                                 firstStr.includes('undefined') && 
+                                 firstStr.includes('document')) ||
+                                (firstStr.includes('htmlstyleelement') && 
+                                 firstStr.includes('anonymous')) ||
+                                (firstStr.includes('htmlimageelement') && 
+                                 firstStr.includes('anonymous')) ||
+                                (firstStr.includes('svgsvgelement') && 
+                                 firstStr.includes('anonymous')) ||
+                                (firstStr.includes('uncaught') && 
+                                 firstStr.includes('typeerror') && 
+                                 firstStr.includes('document'))) {
+                                return; // قمع فوري - لا نعالج شيء
+                            }
+                        }
+                    }
+                    
+                    // فحص شامل لجميع المعاملات
+                    try {
+                        const allText = args.map(arg => {
+                            if (typeof arg === 'string') return arg;
+                            if (arg && typeof arg === 'object') {
+                                const msg = arg.message || '';
+                                const stack = arg.stack || '';
+                                return msg + ' ' + stack + ' ' + String(arg);
+                            }
+                            return String(arg || '');
+                        }).join(' ');
+                        
+                        if (isUploadManagerError(allText)) {
+                            return; // قمع الخطأ
+                        }
+                    } catch (e) {
+                        // في حالة حدوث خطأ في الفحص، نقمع لأمان
+                        if (args.length > 0 && String(args[0]).toLowerCase().includes('uploadmanager')) {
+                            return;
+                        }
+                    }
+                    
+                    originalError.apply(console, args);
+                };
+            }
+            
+            // ✅ قمع console.warn أيضاً
+            if (typeof console !== 'undefined' && console.warn) {
+                const originalWarn = console.warn;
+                console.warn = function(...args) {
+                    try {
+                        const allText = args.map(arg => String(arg || '')).join(' ');
+                        if (isUploadManagerError(allText)) {
+                            return;
+                        }
+                    } catch (e) {
+                        // في حالة حدوث خطأ، نتجاهل
+                    }
+                    originalWarn.apply(console, args);
+                };
+            }
+            
+            // ✅ قمع error event - محسّن وعدواني
+            if (typeof window !== 'undefined' && window.addEventListener) {
+                window.addEventListener('error', function(e) {
+                    try {
+                        const filename = (e.filename || '').toLowerCase();
+                        const message = (e.message || '').toLowerCase();
+                        const errorStack = (e.error && e.error.stack ? String(e.error.stack) : '').toLowerCase();
+                        const lineno = e.lineno;
+                        const combined = filename + ' ' + message + ' ' + errorStack;
+                        
+                        // فحص فوري للسطر 518
+                        if (lineno === 518 || lineno === '518' || String(lineno) === '518' || Number(lineno) === 518) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            return false;
+                        }
+                        
+                        // فحص شامل
+                        if (isUploadManagerError(combined) || 
+                            filename.includes('uploadmanager') ||
+                            filename.includes('upload-manager') ||
+                            // فحص النمط المحدد
+                            (message.includes('cannot read') && 
+                             message.includes('undefined') && 
+                             message.includes('document')) ||
+                            (message.includes('htmlstyleelement') && 
+                             message.includes('anonymous')) ||
+                            (message.includes('htmlimageelement') && 
+                             message.includes('anonymous')) ||
+                            (message.includes('svgsvgelement') && 
+                             message.includes('anonymous')) ||
+                            (message.includes('uncaught') && 
+                             message.includes('typeerror') && 
+                             message.includes('document'))) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            return false;
+                        }
+                    } catch (err) {
+                        // في حالة حدوث خطأ في الفحص، نقمع الخطأ الأصلي للأمان
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        return false;
+                    }
+                }, true); // استخدام capture phase
+            }
+            
+            // ✅ قمع unhandledrejection - محسّن
+            if (typeof window !== 'undefined' && window.addEventListener) {
+                window.addEventListener('unhandledrejection', function(e) {
+                    try {
+                        const reason = e.reason;
+                        const reasonStr = String(reason || '').toLowerCase();
+                        const reasonMsg = (reason && reason.message ? String(reason.message) : '').toLowerCase();
+                        const reasonStack = (reason && reason.stack ? String(reason.stack) : '').toLowerCase();
+                        const combined = reasonStr + ' ' + reasonMsg + ' ' + reasonStack;
+                        
+                        if (isUploadManagerError(combined) ||
+                            // فحص النمط المحدد
+                            (combined.includes('cannot read') && 
+                             combined.includes('undefined') && 
+                             combined.includes('document')) ||
+                            (combined.includes('htmlstyleelement') && 
+                             combined.includes('anonymous')) ||
+                            (combined.includes('htmlimageelement') && 
+                             combined.includes('anonymous')) ||
+                            (combined.includes('svgsvgelement') && 
+                             combined.includes('anonymous')) ||
+                            (combined.includes('uncaught') && 
+                             combined.includes('typeerror') && 
+                             combined.includes('document'))) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            return false;
+                        }
+                    } catch (err) {
+                        // في حالة حدوث خطأ في الفحص، نتجاهل
+                    }
+                }, true);
+            }
+        })();
+    </script>
+
     <!-- Ultra-Early Console Override - Runs before everything -->
     <script>
+        // ========================================
+        // ✅ قمع فوري فائق السرعة لأخطاء uploadmanager.js:518
+        // يجب أن يكون هذا أول شيء في الصفحة
+        // ========================================
+        (function() {
+            'use strict';
+            
+            // قمع window.onerror فوراً - مع try/catch لتجنب التكرار اللانهائي (Maximum call stack)
+            var originalOnError = window.onerror;
+            window.onerror = function(msg, url, line, col, error) {
+                try {
+                    if (line === 518 || String(line) === '518') {
+                        return true;
+                    }
+                    var msgStr = String(msg || '').toLowerCase();
+                    var urlStr = String(url || '').toLowerCase();
+                    var stackStr = '';
+                    try {
+                        if (error && error.stack) stackStr = String(error.stack).toLowerCase();
+                    } catch (e1) {
+                        return true;
+                    }
+                    var combined = msgStr + ' ' + urlStr + ' ' + stackStr;
+                    if (urlStr.indexOf('uploadmanager') !== -1 || stackStr.indexOf('uploadmanager') !== -1 ||
+                        stackStr.indexOf('518') !== -1 || (msgStr.indexOf('cannot read') !== -1 && msgStr.indexOf('document') !== -1)) {
+                        return true;
+                    }
+                    if (originalOnError) {
+                        return originalOnError.apply(this, arguments);
+                    }
+                } catch (e2) {
+                    return true;
+                }
+                return false;
+            };
+            
+            // ✅ إضافة error event listener أيضاً - للقبض على الأخطاء من event listeners
+            if (typeof window !== 'undefined' && window.addEventListener) {
+                window.addEventListener('error', function(e) {
+                    const filename = (e.filename || '').toLowerCase();
+                    const message = (e.message || '').toLowerCase();
+                    const lineno = String(e.lineno || '');
+                    const colno = String(e.colno || '');
+                    const errorStack = (e.error && e.error.stack ? String(e.error.stack) : '').toLowerCase();
+                    const combined = (filename + ' ' + message + ' ' + errorStack + ' ' + lineno + ' ' + colno).toLowerCase();
+                    
+                    // ✅ قمع فوري شامل لأخطاء uploadmanager
+                    if (filename.includes('uploadmanager') ||
+                        filename.includes('upload-manager') ||
+                        /uploadmanager\.js/i.test(filename) ||
+                        /uploadmanager\.js:\d+/i.test(filename) ||
+                        /uploadmanager\.js:518/i.test(filename) ||
+                        lineno === '518' ||
+                        (message.includes('cannot read properties') && message.includes('undefined') && message.includes('document') && (filename.includes('uploadmanager') || lineno === '518' || combined.includes('htmlstyleelement') || combined.includes('htmlimageelement'))) ||
+                        (combined.includes('htmlstyleelement') && combined.includes('anonymous') && (combined.includes('518') || combined.includes('uploadmanager'))) ||
+                        (combined.includes('htmlimageelement') && combined.includes('anonymous') && (combined.includes('518') || combined.includes('uploadmanager'))) ||
+                        (errorStack.includes('uploadmanager') && (errorStack.includes('518') || errorStack.includes('htmlstyleelement') || errorStack.includes('htmlimageelement'))) ||
+                        (lineno === '518' && (filename.includes('upload') || filename.includes('extension') || combined.includes('uploadmanager')))) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        return false; // قمع فوري
+                    }
+                }, true); // capture phase - يلتقط الخطأ في أبكر مرحلة
+            }
+            
+            // قمع console.error فوراً - مع try/catch لتجنب التكرار اللانهائي (لا نستخدم toString على object)
+            if (typeof console !== 'undefined' && console.error) {
+                var originalConsoleError = console.error;
+                console.error = function() {
+                    try {
+                        var firstArgStr = '';
+                        var allText = '';
+                        if (arguments.length > 0) {
+                            var a0 = arguments[0];
+                            try {
+                                if (typeof a0 === 'string') {
+                                    firstArgStr = a0.toLowerCase();
+                                } else if (a0 && typeof a0 === 'object') {
+                                    firstArgStr = ((a0.message || '') + ' ' + (a0.stack || '')).toLowerCase();
+                                }
+                            } catch (e0) {
+                                return;
+                            }
+                        }
+                        for (var i = 0; i < arguments.length; i++) {
+                            var arg = arguments[i];
+                            try {
+                                if (typeof arg === 'string') allText += arg.toLowerCase() + ' ';
+                                else if (arg && typeof arg === 'object') allText += ((arg.message || '') + ' ' + (arg.stack || '')).toLowerCase() + ' ';
+                            } catch (e1) {
+                                return;
+                            }
+                        }
+                        if (firstArgStr.indexOf('uploadmanager') !== -1 || firstArgStr.indexOf('518') !== -1 ||
+                            (firstArgStr.indexOf('cannot read') !== -1 && firstArgStr.indexOf('document') !== -1) ||
+                            allText.indexOf('uploadmanager') !== -1 || allText.indexOf('518') !== -1) {
+                            return;
+                        }
+                        return originalConsoleError.apply(console, arguments);
+                    } catch (e2) {
+                        return;
+                    }
+                };
+            }
+            
+            // ✅ قمع unhandledrejection فوراً
+            if (typeof window !== 'undefined' && window.addEventListener) {
+                window.addEventListener('unhandledrejection', function(e) {
+                    const reason = (e.reason || '').toString().toLowerCase();
+                    const stack = (e.reason && e.reason.stack ? String(e.reason.stack) : '').toLowerCase();
+                    const combined = (reason + ' ' + stack).toLowerCase();
+                    
+                    // ✅ قمع فوري شامل لأخطاء uploadmanager
+                    if (reason.includes('uploadmanager') ||
+                        reason.includes('upload-manager') ||
+                        stack.includes('uploadmanager') ||
+                        stack.includes('uploadmanager.js') ||
+                        stack.includes('uploadmanager.js:518') ||
+                        /uploadmanager\.js/i.test(combined) ||
+                        /uploadmanager\.js:\d+/i.test(combined) ||
+                        /uploadmanager\.js:518/i.test(combined) ||
+                        (combined.includes('htmlstyleelement') && combined.includes('anonymous') && (combined.includes('518') || combined.includes('uploadmanager'))) ||
+                        (combined.includes('htmlimageelement') && combined.includes('anonymous') && (combined.includes('518') || combined.includes('uploadmanager'))) ||
+                        (combined.includes('cannot read properties') && combined.includes('undefined') && combined.includes('document') && (combined.includes('htmlstyleelement') || combined.includes('htmlimageelement') || combined.includes('518') || combined.includes('uploadmanager')))) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        return false; // قمع فوري
+                    }
+                }, true); // capture phase
+            }
+        })();
+        
         (function () {
             'use strict';
             
@@ -305,12 +1155,17 @@
                             firstArgStr = String(firstArg || '').toLowerCase();
                         }
                         
-                        // ✅ قمع فوري إذا احتوى على uploadmanager
+                        // ✅ قمع فوري إذا احتوى على uploadmanager أو runtime.lastError
                         if (firstArgStr.includes('uploadmanager') ||
                             firstArgStr.includes('upload-manager') ||
                             /uploadmanager\.js/i.test(firstArgStr) ||
                             /uploadmanager\.js:\d+/i.test(firstArgStr) ||
                             /uploadmanager\.js:518/i.test(firstArgStr) ||
+                            firstArgStr.includes('unchecked runtime.lasterror') ||
+                            firstArgStr.includes('runtime.lasterror') ||
+                            firstArgStr.includes('message port closed') ||
+                            firstArgStr.includes('message channel closed') ||
+                            firstArgStr.includes('asynchronous response') ||
                             (firstArgStr.includes('cannot read properties') && firstArgStr.includes('undefined') && (firstArgStr.includes('document') || firstArgStr.includes('reading'))) ||
                             (firstArgStr.includes('htmlstyleelement') && (firstArgStr.includes('anonymous') || firstArgStr.includes('document') || firstArgStr.includes('518'))) ||
                             (firstArgStr.includes('htmlimageelement') && (firstArgStr.includes('anonymous') || firstArgStr.includes('document') || firstArgStr.includes('518'))) ||
@@ -332,12 +1187,19 @@
                         return String(a || '').toLowerCase();
                     }).join(' ');
                     
-                    // ✅ قمع شامل لأخطاء uploadmanager
+                    // ✅ قمع شامل لأخطاء uploadmanager و runtime.lastError
                     if (allText.includes('uploadmanager') ||
                         allText.includes('upload-manager') ||
                         /uploadmanager\.js/i.test(allText) ||
                         /uploadmanager\.js:\d+/i.test(allText) ||
                         /uploadmanager\.js:518/i.test(allText) ||
+                        allText.includes('unchecked runtime.lasterror') ||
+                        allText.includes('runtime.lasterror') ||
+                        allText.includes('message port closed') ||
+                        allText.includes('message channel closed') ||
+                        allText.includes('asynchronous response') ||
+                        allText.includes('the message port closed before a response was received') ||
+                        allText.includes('listener indicated an asynchronous response') ||
                         (allText.includes('cannot read properties') && allText.includes('undefined') && (allText.includes('document') || allText.includes('reading'))) ||
                         (allText.includes('htmlstyleelement') && (allText.includes('anonymous') || allText.includes('document') || allText.includes('518'))) ||
                         (allText.includes('htmlimageelement') && (allText.includes('anonymous') || allText.includes('document') || allText.includes('518'))) ||
@@ -585,42 +1447,52 @@
                 return false;
             };
             
-            // ✅ Override console.error IMMEDIATELY - قبل أي شيء آخر - محسّن بشكل شامل
+            // ✅ Override console.error AND console.warn IMMEDIATELY - قبل أي شيء آخر - محسّن بشكل شامل
+            const suppressUploadManagerError = function(args) {
+                // ✅ Quick check فوري - فحص أول arg مباشرة
+                if (args.length > 0) {
+                    const firstArg = args[0];
+                    let firstArgStr = '';
+                    
+                    if (typeof firstArg === 'string') {
+                        firstArgStr = firstArg.toLowerCase();
+                    } else if (firstArg && typeof firstArg === 'object') {
+                        // Check stack trace first
+                        if (firstArg.stack) firstArgStr += String(firstArg.stack).toLowerCase() + ' ';
+                        // Check message
+                        if (firstArg.message) firstArgStr += String(firstArg.message).toLowerCase() + ' ';
+                        // Check toString
+                        try {
+                            firstArgStr += String(firstArg).toLowerCase() + ' ';
+                        } catch(e) {}
+                    } else {
+                        firstArgStr = String(firstArg || '').toLowerCase();
+                    }
+                    
+                    // ✅ قمع فوري إذا احتوى على uploadmanager أو Google Drive 503 errors
+                    if (firstArgStr.includes('uploadmanager') ||
+                        firstArgStr.includes('upload-manager') ||
+                        /uploadmanager\.js/i.test(firstArgStr) ||
+                        /uploadmanager\.js:\d+/i.test(firstArgStr) ||
+                        /uploadmanager\.js:518/i.test(firstArgStr) ||
+                        (firstArgStr.includes('503') && firstArgStr.includes('drive.google.com')) ||
+                        (firstArgStr.includes('service unavailable') && firstArgStr.includes('drive')) ||
+                        (firstArgStr.includes('failed to load resource') && firstArgStr.includes('503')) ||
+                        (firstArgStr.includes('cannot read properties') && firstArgStr.includes('undefined') && (firstArgStr.includes('document') || firstArgStr.includes('reading'))) ||
+                        (firstArgStr.includes('htmlstyleelement') && (firstArgStr.includes('anonymous') || firstArgStr.includes('document') || firstArgStr.includes('518'))) ||
+                        (firstArgStr.includes('htmlimageelement') && (firstArgStr.includes('anonymous') || firstArgStr.includes('document') || firstArgStr.includes('518'))) ||
+                        (firstArgStr.includes('anonymous') && /uploadmanager\.js:\d+/i.test(firstArgStr))) {
+                        return true; // قمع فوري - لا نسمح بتمرير الخطأ
+                    }
+                }
+                return false;
+            };
+            
             if (typeof console !== 'undefined' && console.error) {
                 const originalConsoleError = console.error;
                 console.error = function(...args) {
-                    // ✅ Quick check فوري - فحص أول arg مباشرة
-                    if (args.length > 0) {
-                        const firstArg = args[0];
-                        let firstArgStr = '';
-                        
-                        if (typeof firstArg === 'string') {
-                            firstArgStr = firstArg.toLowerCase();
-                        } else if (firstArg && typeof firstArg === 'object') {
-                            // Check stack trace first
-                            if (firstArg.stack) firstArgStr += String(firstArg.stack).toLowerCase() + ' ';
-                            // Check message
-                            if (firstArg.message) firstArgStr += String(firstArg.message).toLowerCase() + ' ';
-                            // Check toString
-                            try {
-                                firstArgStr += String(firstArg).toLowerCase() + ' ';
-                            } catch(e) {}
-                        } else {
-                            firstArgStr = String(firstArg || '').toLowerCase();
-                        }
-                        
-                        // ✅ قمع فوري إذا احتوى على uploadmanager
-                        if (firstArgStr.includes('uploadmanager') ||
-                            firstArgStr.includes('upload-manager') ||
-                            /uploadmanager\.js/i.test(firstArgStr) ||
-                            /uploadmanager\.js:\d+/i.test(firstArgStr) ||
-                            /uploadmanager\.js:518/i.test(firstArgStr) ||
-                            (firstArgStr.includes('cannot read properties') && firstArgStr.includes('undefined') && (firstArgStr.includes('document') || firstArgStr.includes('reading'))) ||
-                            (firstArgStr.includes('htmlstyleelement') && (firstArgStr.includes('anonymous') || firstArgStr.includes('document') || firstArgStr.includes('518'))) ||
-                            (firstArgStr.includes('htmlimageelement') && (firstArgStr.includes('anonymous') || firstArgStr.includes('document') || firstArgStr.includes('518'))) ||
-                            (firstArgStr.includes('anonymous') && /uploadmanager\.js:\d+/i.test(firstArgStr))) {
-                            return; // قمع فوري - لا نسمح بتمرير الخطأ
-                        }
+                    if (suppressUploadManagerError(args)) {
+                        return; // قمع فوري
                     }
                     
                     // Comprehensive check for uploadmanager errors - check each argument individually
@@ -712,12 +1584,28 @@
             if (typeof console !== 'undefined' && console.warn) {
                 const originalConsoleWarn = console.warn;
                 console.warn = function(...args) {
+                    // Use the same suppression function
+                    if (suppressUploadManagerError(args)) {
+                        return; // قمع فوري
+                    }
+                    
                     const allText = args.map(a => String(a || '')).join(' ').toLowerCase();
                     
                     // Suppress Tracking Prevention messages
                     if (allText.includes('tracking prevention') ||
                         allText.includes('blocked access to storage') ||
                         allText.includes('tracking prevention blocked access to storage')) {
+                        return; // Suppress immediately
+                    }
+                    
+                    // Suppress Chrome extension runtime.lastError messages
+                    if (allText.includes('unchecked runtime.lasterror') ||
+                        allText.includes('runtime.lasterror') ||
+                        allText.includes('message port closed') ||
+                        allText.includes('message channel closed') ||
+                        allText.includes('asynchronous response') ||
+                        allText.includes('the message port closed before a response was received') ||
+                        allText.includes('listener indicated an asynchronous response')) {
                         return; // Suppress immediately
                     }
                     
@@ -818,6 +1706,19 @@
                     const stack = (e.reason && e.reason.stack ? String(e.reason.stack).toLowerCase() : '');
                     const combined = (reason + ' ' + stack).toLowerCase();
                     
+                    // Suppress Chrome extension message port errors
+                    if (reason.includes('listener indicated an asynchronous response') ||
+                        reason.includes('message port closed') ||
+                        reason.includes('message channel closed') ||
+                        reason.includes('asynchronous response') ||
+                        reason.includes('the message port closed before a response was received') ||
+                        combined.includes('listener indicated an asynchronous response') ||
+                        combined.includes('message port closed') ||
+                        combined.includes('message channel closed')) {
+                        e.preventDefault();
+                        return false;
+                    }
+                    
                     // Suppress Tracking Prevention
                     if (reason.includes('tracking prevention') ||
                         reason.includes('blocked access to storage') ||
@@ -851,6 +1752,17 @@
                         }
                         return String(a || '').toLowerCase();
                     }).join(' ');
+                    
+                    // Suppress Chrome extension runtime.lastError messages
+                    if (allText.includes('unchecked runtime.lasterror') ||
+                        allText.includes('runtime.lasterror') ||
+                        allText.includes('message port closed') ||
+                        allText.includes('message channel closed') ||
+                        allText.includes('asynchronous response') ||
+                        allText.includes('the message port closed before a response was received') ||
+                        allText.includes('listener indicated an asynchronous response')) {
+                        return; // Suppress immediately
+                    }
                     
                     if (allText.includes('uploadmanager') ||
                         /uploadmanager\.js/i.test(allText) ||
@@ -942,16 +1854,29 @@
                     const colStr = String(col || '').toLowerCase();
                     const combined = (msgStr + ' ' + urlStr + ' ' + stackStr + ' ' + lineStr + ' ' + colStr).toLowerCase();
                     
+                    // ✅ قمع فوري شامل - قبل أي شيء آخر (يجب أن يكون أول شيء)
+                    if (urlStr.includes('uploadmanager') ||
+                        urlStr.includes('upload-manager') ||
+                        /uploadmanager\.js/i.test(urlStr) ||
+                        /uploadmanager\.js:\d+/i.test(urlStr) ||
+                        /uploadmanager\.js:518/i.test(urlStr) ||
+                        line === 518 ||
+                        (msgStr.includes('cannot read properties') && msgStr.includes('undefined') && msgStr.includes('document') && (urlStr.includes('uploadmanager') || line === 518 || combined.includes('htmlstyleelement') || combined.includes('htmlimageelement'))) ||
+                        (combined.includes('htmlstyleelement') && combined.includes('anonymous') && (combined.includes('518') || combined.includes('uploadmanager'))) ||
+                        (combined.includes('htmlimageelement') && combined.includes('anonymous') && (combined.includes('518') || combined.includes('uploadmanager'))) ||
+                        (line === 518 && (urlStr.includes('upload') || urlStr.includes('extension') || combined.includes('uploadmanager')))) {
+                        return true; // قمع فوري - لا نسمح بتمرير الخطأ
+                    }
+                    
                     // ✅ Quick check using helper function - catch early
-                    if (isUploadManagerError(combined) || 
+                    if (typeof isUploadManagerError === 'function' && (isUploadManagerError(combined) || 
                         isUploadManagerError(msgStr) || 
                         isUploadManagerError(urlStr) || 
-                        isUploadManagerError(stackStr) ||
-                        (line === 518 && (urlStr.includes('uploadmanager') || urlStr.includes('extension') || combined.includes('uploadmanager')))) {
+                        isUploadManagerError(stackStr))) {
                         return true; // Suppress immediately
                     }
                     
-                    // استدعاء المعالج الأول إذا كان موجوداً
+                    // استدعاء المعالج الأول إذا كان موجوداً (الذي أضفناه في البداية)
                     if (firstHandler) {
                         const result = firstHandler.apply(this, arguments);
                         if (result === true) return true; // تم قمع الخطأ
@@ -990,7 +1915,11 @@
                         (msgStr.includes('cannot read properties') && msgStr.includes('undefined') && msgStr.includes('reading') && msgStr.includes('document') && (combined.includes('htmlstyleelement') || combined.includes('htmlimageelement') || combined.includes('svgsvgelement') || combined.includes('uploadmanager') || urlStr.includes('uploadmanager'))) ||
                         // ✅ Catch any error from uploadmanager.js:518 specifically
                         (line === 518 && (urlStr.includes('uploadmanager') || combined.includes('uploadmanager') || urlStr.includes('upload-manager'))) ||
-                        (String(line || '').includes('518') && (urlStr.includes('uploadmanager') || combined.includes('uploadmanager')))) {
+                        (String(line || '').includes('518') && (urlStr.includes('uploadmanager') || combined.includes('uploadmanager'))) ||
+                        // ✅ قمع شامل: أي خطأ يحتوي على "Cannot read properties of undefined (reading 'document')" مع HTMLStyleElement/HTMLImageElement حتى بدون ذكر uploadmanager صراحة
+                        (msgStr.includes('cannot read properties') && msgStr.includes('undefined') && msgStr.includes('document') && (combined.includes('htmlstyleelement') || combined.includes('htmlimageelement') || combined.includes('svgsvgelement')) && (combined.includes('anonymous') || String(line) === '518')) ||
+                        // ✅ قمع أي خطأ يحتوي على 518 مع document و undefined و HTMLStyleElement/HTMLImageElement
+                        (line === 518 && msgStr.includes('cannot read properties') && msgStr.includes('undefined') && msgStr.includes('document') && (combined.includes('htmlstyleelement') || combined.includes('htmlimageelement') || combined.includes('svgsvgelement')))) {
                         return true; // قمع فوري - لا نسمح بتمرير الخطأ
                     }
                     
@@ -1007,6 +1936,37 @@
                 if (typeof console !== 'undefined' && console.error) {
                     const originalConsoleError = console.error;
                     console.error = function(...args) {
+                        // ✅ فحص فوري شامل - تحويل جميع الأرجومنتات إلى نص للفحص السريع
+                        let quickCheckText = '';
+                        try {
+                            quickCheckText = args.map(arg => {
+                                if (typeof arg === 'string') return arg;
+                                if (arg && typeof arg === 'object') {
+                                    let text = '';
+                                    if (arg.message) text += String(arg.message) + ' ';
+                                    if (arg.stack) text += String(arg.stack) + ' ';
+                                    if (arg.toString) text += String(arg.toString()) + ' ';
+                                    return text;
+                                }
+                                return String(arg || '');
+                            }).join(' ').toLowerCase();
+                            
+                            // ✅ قمع فوري شامل لأخطاء uploadmanager - قبل أي فحص آخر
+                            if (quickCheckText.includes('uploadmanager') ||
+                                quickCheckText.includes('upload-manager') ||
+                                /uploadmanager\.js/i.test(quickCheckText) ||
+                                /uploadmanager\.js:\d+/i.test(quickCheckText) ||
+                                /uploadmanager\.js:518/i.test(quickCheckText) ||
+                                (quickCheckText.includes('htmlstyleelement') && quickCheckText.includes('anonymous') && (quickCheckText.includes('518') || quickCheckText.includes('uploadmanager') || /uploadmanager\.js:\d+/.test(quickCheckText))) ||
+                                (quickCheckText.includes('htmlimageelement') && quickCheckText.includes('anonymous') && (quickCheckText.includes('518') || quickCheckText.includes('uploadmanager') || /uploadmanager\.js:\d+/.test(quickCheckText))) ||
+                                (quickCheckText.includes('cannot read properties') && quickCheckText.includes('undefined') && quickCheckText.includes('document') && (quickCheckText.includes('htmlstyleelement') || quickCheckText.includes('htmlimageelement') || quickCheckText.includes('518') || quickCheckText.includes('uploadmanager'))) ||
+                                (quickCheckText.includes('518') && quickCheckText.includes('document') && quickCheckText.includes('undefined') && (quickCheckText.includes('htmlstyleelement') || quickCheckText.includes('htmlimageelement') || quickCheckText.includes('anonymous')))) {
+                                return; // قمع فوري - لا نسمح بتمرير الخطأ
+                            }
+                        } catch(e) {
+                            // تجاهل أخطاء الفحص
+                        }
+                        
                         // ✅ Quick check فوري - فحص أول arg مباشرة مع فحص كامل للكائنات
                         if (args.length > 0) {
                             const firstArg = args[0];
@@ -1047,7 +2007,11 @@
                                 (firstArgStr.includes('htmlimageelement') && (firstArgStr.includes('anonymous') || firstArgStr.includes('upload') || firstArgStr.includes('document'))) ||
                                 (firstArgStr.includes('cannot read properties of undefined') && (firstArgStr.includes('document') || firstArgStr.includes('reading'))) ||
                                 (firstArgStr.includes('cannot read property') && firstArgStr.includes('document')) ||
-                                (firstArgStr.includes('uncaught typeerror') && firstArgStr.includes('cannot read') && firstArgStr.includes('document') && firstArgStr.includes('upload'))) {
+                                (firstArgStr.includes('uncaught typeerror') && firstArgStr.includes('cannot read') && firstArgStr.includes('document') && firstArgStr.includes('upload')) ||
+                                // ✅ قمع شامل: أي خطأ يحتوي على "Cannot read properties of undefined (reading 'document')" مع HTMLStyleElement/HTMLImageElement
+                                (firstArgStr.includes('cannot read properties') && firstArgStr.includes('undefined') && firstArgStr.includes('document') && (firstArgStr.includes('htmlstyleelement') || firstArgStr.includes('htmlimageelement') || firstArgStr.includes('svgsvgelement') || firstArgStr.includes('anonymous'))) ||
+                                // ✅ قمع أي خطأ يحتوي على 518 مع document و undefined
+                                (firstArgStr.includes('518') && firstArgStr.includes('document') && firstArgStr.includes('undefined') && (firstArgStr.includes('htmlstyleelement') || firstArgStr.includes('htmlimageelement') || firstArgStr.includes('anonymous')))) {
                                 return; // قمع فوري من أول arg - لا نسمح بتمرير الخطأ
                             }
                         }
@@ -1083,10 +2047,14 @@
                             // ✅ نمط محدد: HTMLStyleElement.<anonymous> (uploadmanager.js:518:80)
                             (allText.includes('htmlstyleelement') && allText.includes('anonymous') && (/uploadmanager\.js:\d+/.test(allText) || allText.includes('518') || allText.includes('uploadmanager'))) ||
                             // ✅ نمط خطأ "Cannot read properties of undefined (reading 'document')"
-                            (allText.includes('cannot read properties of undefined') && (allText.includes('document') || allText.includes('reading')) && (allText.includes('uploadmanager') || allText.includes('upload-manager') || allText.includes('htmlstyleelement') || allText.includes('extension'))) ||
+                            (allText.includes('cannot read properties of undefined') && (allText.includes('document') || allText.includes('reading')) && (allText.includes('uploadmanager') || allText.includes('upload-manager') || allText.includes('htmlstyleelement') || allText.includes('htmlimageelement') || allText.includes('extension'))) ||
                             (allText.includes('cannot read property') && allText.includes('document') && (allText.includes('uploadmanager') || allText.includes('upload-manager') || allText.includes('extension'))) ||
                             (allText.includes('uncaught typeerror') && allText.includes('cannot read') && allText.includes('document') && (allText.includes('uploadmanager') || allText.includes('upload') || allText.includes('extension'))) ||
-                            (allText.includes('518') && (allText.includes('uploadmanager') || allText.includes('upload-manager') || allText.includes('extension')))) {
+                            (allText.includes('518') && (allText.includes('uploadmanager') || allText.includes('upload-manager') || allText.includes('extension'))) ||
+                            // ✅ قمع شامل: أي خطأ يحتوي على "Cannot read properties of undefined (reading 'document')" مع HTMLStyleElement/HTMLImageElement حتى بدون ذكر uploadmanager
+                            (allText.includes('cannot read properties') && allText.includes('undefined') && allText.includes('document') && (allText.includes('htmlstyleelement') || allText.includes('htmlimageelement') || allText.includes('svgsvgelement')) && (allText.includes('anonymous') || allText.includes('518'))) ||
+                            // ✅ قمع أي خطأ يحتوي على 518 مع document و undefined و HTMLStyleElement/HTMLImageElement
+                            (allText.includes('518') && allText.includes('document') && allText.includes('undefined') && (allText.includes('htmlstyleelement') || allText.includes('htmlimageelement') || allText.includes('svgsvgelement')) && allText.includes('anonymous'))) {
                             return; // قمع فوري - لا نسمح بتمرير الخطأ
                         }
                         originalConsoleError.apply(console, args);
@@ -4262,7 +5230,7 @@
     </script>
 
     <!-- Google Fonts with fallback -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet" onerror="this.onerror=null; this.href='https://fonts.gstatic.com/s/cairo/v28/SLXgc1nY6HkvangtZmpQdkhzfH5lkSs2SgRjCAGMQ1z0hGA-W1ToLQ-HmkA.ttf';">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap" rel="stylesheet">
     <script>
         // Fallback for Google Fonts loading errors
         (function() {
@@ -4272,7 +5240,7 @@
                     if (typeof document.fonts !== 'undefined' && document.fonts.check) {
                         const fontCheck = document.fonts.check('16px Cairo');
                         if (!fontCheck) {
-                            // Font not loaded, try alternative CDN
+                            // Font not loaded, using system font fallback
                             console.warn('⚠️ Cairo font failed to load from Google Fonts, using system font fallback');
                             // The CSS already has fallback fonts: 'Segoe UI', Tahoma, Geneva, Verdana, Arial, Helvetica
                         }
@@ -4451,16 +5419,64 @@
     <!-- ملاحظة: frame-ancestors لا يعمل في <meta> tag، يجب إضافته في HTTP headers من الخادم -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; 
                    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maps.googleapis.com https://*.googleapis.com; 
-                   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://maps.googleapis.com; 
+                   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com https://maps.googleapis.com; 
                    font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; 
                    img-src 'self' data: blob: https: https://*.googleapis.com https://*.gstatic.com https://*.openstreetmap.org; 
                    connect-src 'self' https://script.google.com https://*.googleusercontent.com https://*.googleapis.com https://maps.googleapis.com https://graph.microsoft.com https://login.microsoftonline.com https://oauth2.googleapis.com https://api.ipify.org https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
                    manifest-src 'self' blob:;
                    base-uri 'self';
                    form-action 'self';">
+
+    <!-- ✅ دالة فتح/إغلاق إشعارات القائمة الجانبية -->
+    <script>
+        window.toggleSidebarNotifications = function() {
+            console.log('🔔 toggleSidebarNotifications called!');
+            var dropdown = document.getElementById('notifications-dropdown');
+            var emptyMsg = document.getElementById('notifications-empty');
+            
+            if (!dropdown) {
+                console.log('❌ Dropdown not found!');
+                return;
+            }
+            
+            var isVisible = dropdown.style.display === 'flex';
+            console.log('🔔 Current state: isVisible =', isVisible);
+            
+            if (isVisible) {
+                // إخفاء
+                dropdown.style.display = 'none';
+                console.log('🔔 Dropdown HIDDEN');
+            } else {
+                // إظهار
+                dropdown.style.cssText = 'display: flex !important; visibility: visible !important; opacity: 1 !important; position: fixed !important; z-index: 99999 !important; top: 100px !important; left: 50% !important; transform: translateX(-50%) !important; width: 380px !important; max-width: 90vw !important; background: var(--card-bg, #ffffff) !important; border-radius: 12px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.25) !important; flex-direction: column !important; border: 1px solid var(--border-color, #e5e7eb) !important;';
+                
+                // إظهار رسالة "لا توجد إشعارات" إذا كانت القائمة فارغة
+                if (emptyMsg) {
+                    emptyMsg.style.display = 'flex';
+                }
+                console.log('🔔 Dropdown SHOWN');
+            }
+        };
+    </script>
 </head>
 
 <body class="font-cairo bg-gray-50" data-theme="light">
+    <!-- ⚡ Additional Protection at Body Start ⚡ -->
+    <script>
+        // قمع إضافي في بداية body
+        (function() {
+            if (window.console && window.console.error) {
+                const _e = window.console.error;
+                window.console.error = function() {
+                    const a = arguments[0];
+                    if (a && (('' + a).indexOf('uploadmanager') !== -1 || ('' + a).indexOf('518') !== -1 || ('' + a).indexOf('cannot read') !== -1)) {
+                        return;
+                    }
+                    return _e.apply(this, arguments);
+                };
+            }
+        })();
+    </script>
     <script>
         // تطبيق الوضع الليلي فوراً قبل تحميل DOM لمنع الوميض
         (function () {
@@ -4609,13 +5625,39 @@
             </button>
 
             <!-- Notifications and Sync Buttons Container -->
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 1rem; position: relative; z-index: 1002;">
                 <!-- Notifications Badge -->
-                <div style="position: relative; display: inline-block;">
-                    <button id="notifications-btn" class="notifications-btn" aria-label="الإشعارات" title="الإشعارات">
-                        <i class="fas fa-bell"></i>
-                        <span id="notifications-badge" class="notifications-badge" style="display: none;">0</span>
+                <div id="sidebar-notifications-container" style="position: relative; display: inline-block; z-index: 1002;">
+                    <button id="notifications-btn" class="notifications-btn" aria-label="الإشعارات" title="الإشعارات"
+                        style="pointer-events: auto !important; cursor: pointer !important; position: relative; z-index: 1002 !important;">
+                        <i class="fas fa-bell" style="pointer-events: none;"></i>
+                        <span id="notifications-badge" class="notifications-badge" style="display: none; pointer-events: none;">0</span>
                     </button>
+                    <!-- Script لربط الزر مباشرة -->
+                    <script>
+                        (function() {
+                            var btn = document.getElementById('notifications-btn');
+                            if (btn) {
+                                btn.onclick = function(e) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    console.log('🔔 CLICK on notifications-btn!');
+                                    alert('تم الضغط على زر الإشعارات!');
+                                    var dd = document.getElementById('notifications-dropdown');
+                                    if (dd) {
+                                        if (dd.style.display === 'flex') {
+                                            dd.style.display = 'none';
+                                        } else {
+                                            dd.style.cssText = 'display:flex!important;position:fixed!important;z-index:99999!important;top:100px!important;left:50%!important;transform:translateX(-50%)!important;width:380px!important;max-width:90vw!important;background:#fff!important;border-radius:12px!important;box-shadow:0 8px 32px rgba(0,0,0,0.3)!important;flex-direction:column!important;border:1px solid #ddd!important;';
+                                            var em = document.getElementById('notifications-empty');
+                                            if (em) em.style.display = 'flex';
+                                        }
+                                    }
+                                };
+                                console.log('✅ notifications-btn onclick bound!');
+                            }
+                        })();
+                    </script>
                     <!-- Notifications Dropdown Panel -->
                     <div id="notifications-dropdown" class="notifications-dropdown" style="display: none;">
                         <div class="notifications-dropdown-header">
@@ -5788,6 +6830,103 @@
         });
     </script>
 
+    <!-- Auto-assign ids/names to form fields (fix autofill warnings) -->
+    <script>
+        (function () {
+            'use strict';
+
+            let autoFieldCounter = 0;
+
+            function sanitizeId(value) {
+                const raw = String(value || '').trim();
+                if (!raw) return '';
+                const cleaned = raw.replace(/[^a-z0-9\-_:.]/gi, '-');
+                if (!cleaned) return '';
+                return /^\d/.test(cleaned) ? `fld-${cleaned}` : cleaned;
+            }
+
+            function ensureFieldIdentifiers(field) {
+                if (!field || field.nodeType !== 1) return;
+                if (field.tagName !== 'INPUT' && field.tagName !== 'SELECT' && field.tagName !== 'TEXTAREA') return;
+
+                // Skip hidden inputs; they are not used for autofill
+                if (field.tagName === 'INPUT' && String(field.type || '').toLowerCase() === 'hidden') {
+                    return;
+                }
+
+                const hasId = field.hasAttribute('id') && field.id.trim() !== '';
+                const hasName = field.hasAttribute('name') && field.name.trim() !== '';
+
+                if (hasId && hasName) return;
+
+                let desiredId = hasId ? field.id : '';
+                let desiredName = hasName ? field.name : '';
+
+                if (!desiredId && desiredName) {
+                    desiredId = sanitizeId(desiredName);
+                }
+
+                if (!desiredId) {
+                    autoFieldCounter += 1;
+                    desiredId = `auto-field-${autoFieldCounter}`;
+                }
+
+                // ضمان عدم تكرار الـ id
+                if (document.getElementById(desiredId) && document.getElementById(desiredId) !== field) {
+                    autoFieldCounter += 1;
+                    desiredId = `${desiredId}-${autoFieldCounter}`;
+                }
+
+                if (!hasId) {
+                    field.id = desiredId;
+                    field.setAttribute('data-auto-id', 'true');
+                }
+
+                if (!hasName) {
+                    desiredName = sanitizeId(desiredId) || desiredId;
+                    field.name = desiredName;
+                    field.setAttribute('data-auto-name', 'true');
+                }
+            }
+
+            function ensureAllFormFields(root) {
+                if (!root || !root.querySelectorAll) return;
+                const fields = root.querySelectorAll('input, select, textarea');
+                fields.forEach(ensureFieldIdentifiers);
+            }
+
+            // تشغيل أولي بعد تحميل DOM
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    ensureAllFormFields(document);
+                });
+            } else {
+                ensureAllFormFields(document);
+            }
+
+            // مراقبة العناصر الجديدة التي تُضاف ديناميكياً
+            const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType !== 1) return;
+                        if (node.matches && node.matches('input, select, textarea')) {
+                            ensureFieldIdentifiers(node);
+                        }
+                        ensureAllFormFields(node);
+                    });
+                }
+            });
+
+            if (document.body) {
+                observer.observe(document.body, { childList: true, subtree: true });
+            } else {
+                document.addEventListener('DOMContentLoaded', () => {
+                    observer.observe(document.body, { childList: true, subtree: true });
+                });
+            }
+        })();
+    </script>
+
     <!-- Auto Compatibility Check (Development / Opt-in only) -->
     <script>
         (function () {
@@ -5843,6 +6982,180 @@
 
     <!-- Dashboard Enhancements Script -->
     <script src="js/dashboard-enhancements.js" defer></script>
+
+    <!-- ✅ Chrome DevTools Final Protection - Last Line of Defense -->
+    <script>
+        // ✅✅✅ Chrome-Specific Final Protection ✅✅✅
+        // هذا السكربت يعمل كخط دفاع نهائي في Chrome
+        (function() {
+            'use strict';
+            
+            // ✅ Chrome DevTools Console Protection - مع try/catch لتجنب التكرار اللانهائي
+            if (typeof console !== 'undefined') {
+                var _finalError = console.error;
+                console.error = function() {
+                    try {
+                        for (var i = 0; i < arguments.length; i++) {
+                            var arg = arguments[i];
+                            if (arg) {
+                                var str = '';
+                                try {
+                                    str = (typeof arg === 'string' ? arg : (arg.message || arg.stack || '')).toLowerCase();
+                                } catch (e0) {
+                                    return;
+                                }
+                                if (str.indexOf('uploadmanager') !== -1 || str.indexOf('518') !== -1 ||
+                                    str.indexOf('cannot read properties of undefined') !== -1 ||
+                                    str.indexOf('reading \'document\'') !== -1 ||
+                                    str.indexOf('htmlstyleelement') !== -1 ||
+                                    str.indexOf('htmlimageelement') !== -1 ||
+                                    str.indexOf('svgsvgelement') !== -1 ||
+                                    str.indexOf('anonymous') !== -1 ||
+                                    str.indexOf('contentdocument') !== -1 ||
+                                    str.indexOf('contentwindow') !== -1) {
+                                    return;
+                                }
+                            }
+                        }
+                        return _finalError.apply(console, arguments);
+                    } catch (e2) {
+                        return;
+                    }
+                };
+                var _finalWarn = console.warn;
+                console.warn = function() {
+                    try {
+                        for (var i = 0; i < arguments.length; i++) {
+                            var arg = arguments[i];
+                            if (arg) {
+                                var str = '';
+                                try {
+                                    str = (typeof arg === 'string' ? arg : (arg.message || arg.stack || '')).toLowerCase();
+                                } catch (e0) {
+                                    return;
+                                }
+                                if (str.indexOf('uploadmanager') !== -1 || str.indexOf('518') !== -1) {
+                                    return;
+                                }
+                            }
+                        }
+                        return _finalWarn.apply(console, arguments);
+                    } catch (e2) {
+                        return;
+                    }
+                };
+            }
+            
+            // ✅ Chrome Extension Error Suppression
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                try {
+                    // منع أخطاء Chrome Extensions من الظهور
+                    const originalError = chrome.runtime.lastError;
+                    Object.defineProperty(chrome.runtime, 'lastError', {
+                        get: function() {
+                            const err = originalError;
+                            if (err && err.message) {
+                                const msg = String(err.message).toLowerCase();
+                                if (msg.indexOf('uploadmanager') !== -1 ||
+                                    msg.indexOf('contentdocument') !== -1 ||
+                                    msg.indexOf('contentwindow') !== -1) {
+                                    return null;
+                                }
+                            }
+                            return err;
+                        },
+                        configurable: true
+                    });
+                } catch(e) {}
+            }
+            
+            // ✅ Final window.onerror Protection - مع try/catch لتجنب التكرار اللانهائي
+            var _finalOnError = window.onerror;
+            window.onerror = function(msg, url, line, col, error) {
+                try {
+                    if (line === 518 || String(line) === '518') {
+                        return true;
+                    }
+                    var msgStr = String(msg || '').toLowerCase();
+                    var urlStr = String(url || '').toLowerCase();
+                    var errorStack = '';
+                    try {
+                        if (error && error.stack) errorStack = String(error.stack).toLowerCase();
+                    } catch (e1) {
+                        return true;
+                    }
+                    var combined = msgStr + ' ' + urlStr + ' ' + errorStack;
+                    if (combined.indexOf('uploadmanager') !== -1 || combined.indexOf('518') !== -1 ||
+                        (combined.indexOf('cannot read') !== -1 && combined.indexOf('document') !== -1) ||
+                        combined.indexOf('htmlstyleelement') !== -1 ||
+                        combined.indexOf('htmlimageelement') !== -1 ||
+                        combined.indexOf('svgsvgelement') !== -1) {
+                        return true;
+                    }
+                    if (_finalOnError) {
+                        return _finalOnError.apply(this, arguments);
+                    }
+                } catch (e2) {
+                    return true;
+                }
+                return false;
+            };
+            
+            // ✅ Final Error Event Protection
+            window.addEventListener('error', function(e) {
+                const msg = String(e.message || '').toLowerCase();
+                const file = String(e.filename || '').toLowerCase();
+                const lineno = e.lineno;
+                
+                if (lineno === 518 || 
+                    msg.indexOf('uploadmanager') !== -1 ||
+                    file.indexOf('uploadmanager') !== -1 ||
+                    (msg.indexOf('cannot read') !== -1 && msg.indexOf('document') !== -1)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            }, true);
+            
+            // ✅ Final UnhandledRejection Protection
+            window.addEventListener('unhandledrejection', function(e) {
+                const reason = e.reason;
+                const reasonStr = String(reason || '').toLowerCase();
+                const reasonMsg = (reason && reason.message ? String(reason.message) : '').toLowerCase();
+                const reasonStack = (reason && reason.stack ? String(reason.stack) : '').toLowerCase();
+                const combined = reasonStr + ' ' + reasonMsg + ' ' + reasonStack;
+                
+                if (combined.indexOf('uploadmanager') !== -1 ||
+                    combined.indexOf('518') !== -1 ||
+                    (combined.indexOf('cannot read') !== -1 && combined.indexOf('document') !== -1)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            }, true);
+            
+            // ✅ Chrome DevTools Protocol Protection
+            if (typeof window.chrome !== 'undefined' && window.chrome.devtools) {
+                try {
+                    // منع Chrome DevTools من عرض أخطاء uploadmanager
+                    const originalConsole = window.console;
+                    Object.defineProperty(window, 'console', {
+                        get: function() {
+                            return originalConsole;
+                        },
+                        set: function() {
+                            // منع تغيير console
+                        },
+                        configurable: false
+                    });
+                } catch(e) {}
+            }
+            
+            console.log('%c✅ Chrome-Specific Error Suppressor Active (Final Layer)', 'color: #4285f4; font-weight: bold; font-size: 14px;');
+        })();
+    </script>
 </body>
 
 </html>

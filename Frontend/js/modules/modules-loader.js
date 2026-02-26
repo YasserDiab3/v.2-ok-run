@@ -175,6 +175,28 @@ function loadModule(moduleName) {
                     }
                 }, 100);
                 return; // لا نستدعي resolve هنا، سنستدعيه في checkInterval
+            } else if (moduleName === 'clinic') {
+                // ✅ التحقق من تحميل موديول العيادة (Clinic)
+                let checkCount = 0;
+                const maxChecks = 50; // 50 × 100ms = 5 ثوان
+                const checkInterval = setInterval(() => {
+                    checkCount++;
+                    if (typeof window.Clinic !== 'undefined' && 
+                        typeof window.Clinic.load === 'function') {
+                        log(`✅ Clinic متاح على window.Clinic مع دالة load`);
+                        clearInterval(checkInterval);
+                        safeResolve();
+                    } else if (checkCount >= maxChecks) {
+                        if (typeof window.Clinic !== 'undefined') {
+                            logError(`⚠️ Clinic متاح لكن دالة load غير موجودة أو ليست function`);
+                        } else {
+                            logError(`⚠️ Clinic غير متاح على window بعد ${maxChecks} محاولة`);
+                        }
+                        clearInterval(checkInterval);
+                        safeResolve();
+                    }
+                }, 100);
+                return;
             }
 
             // ✅ للمواديل الأخرى: انتظار قصير ثم resolve
