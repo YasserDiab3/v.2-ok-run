@@ -519,7 +519,9 @@ window.Auth = {
                         Notification.error(msg);
                         if (typeof this.showCreateFirstUserBox === 'function') this.showCreateFirstUserBox();
                     } else if (canSyncUsers) {
-                        msg += ' يرجى التحقق من إعدادات Google Apps Script وورقة Users.';
+                        msg += '\n\n• تأكد من رابط Google Apps Script في "إعداد المزامنة" (يجب أن ينتهي بـ /exec).';
+                        msg += '\n• في Google: نشر التطبيق كـ Web App مع "من له حق الوصول: أي شخص".';
+                        msg += '\n\nللتجربة الأولى يمكنك استخدام: البريد admin@hse.local وكلمة المرور admin123';
                         Notification.error(msg);
                     } else {
                         msg += ' يرجى تفعيل Google Apps Script أو إضافة مستخدمين من الإعدادات.';
