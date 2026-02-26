@@ -12,41 +12,17 @@ window.Auth = {
         // المستخدمون الآن يحملون من قاعدة البيانات فقط
     },
 
-    // ===== Bootstrap Admin (First-time setup only) =====
-    // يسمح بالدخول لأول مرة فقط لتجهيز المزامنة/إضافة المستخدمين، ثم يتم تعطيله تلقائياً بعد نجاح مزامنة Users.
-    // ⚠️ لا يتم تخزين كلمة المرور نصياً هنا. يتم استخدام SHA-256 hash فقط.
-    bootstrap: {
-        email: 'admin@hse.local',
-        // SHA-256("admin123") - لا يوجد تخزين لكلمة المرور النصية داخل الكود
-        passwordHash: '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',
-        disabledKey: 'hse_bootstrap_disabled',
-        disabledAtKey: 'hse_bootstrap_disabled_at'
-    },
-
-    isBootstrapEmail(email) {
-        try {
-            return String(email || '').toLowerCase().trim() === this.bootstrap.email;
-        } catch (e) {
-            return false;
-        }
+    // تم إزالة حساب bootstrap (admin@hse.local) - الاعتماد على المستخدمين من قاعدة البيانات فقط (كما في Netlify)
+    isBootstrapEmail() {
+        return false;
     },
 
     isBootstrapDisabled() {
-        try {
-            return localStorage.getItem(this.bootstrap.disabledKey) === 'true';
-        } catch (e) {
-            return false;
-        }
+        return true;
     },
 
-    disableBootstrap(reason = '') {
-        try {
-            localStorage.setItem(this.bootstrap.disabledKey, 'true');
-            localStorage.setItem(this.bootstrap.disabledAtKey, new Date().toISOString());
-            if (reason) {
-                localStorage.setItem('hse_bootstrap_disabled_reason', String(reason).slice(0, 200));
-            }
-        } catch (e) { /* ignore */ }
+    disableBootstrap() {
+        /* لا يُستخدم */
     },
 
     /**
@@ -61,48 +37,8 @@ window.Auth = {
         return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
     },
 
-    /**
-     * يتم استدعاؤها بعد نجاح مزامنة Users.
-     * إذا تم جلب مستخدمين حقيقيين (غير @hse.local)، نعطّل حساب الـ bootstrap نهائياً.
-     */
     handleUsersSyncSuccess() {
-        try {
-            if (this.isBootstrapDisabled()) return false;
-            const users = AppState?.appData?.users;
-            if (!Array.isArray(users) || users.length === 0) return false;
-
-            const nonLegacyUsers = users.filter(u => {
-                const em = String(u?.email || '').toLowerCase().trim();
-                return em && !em.endsWith('@hse.local');
-            });
-            if (nonLegacyUsers.length === 0) return false;
-
-            // تعطيل نهائي
-            this.disableBootstrap('Users sync completed with real users');
-
-            // إذا كان المستخدم الحالي هو bootstrap → تسجيل خروج إجباري
-            if (AppState?.currentUser?.isBootstrap === true) {
-                try {
-                    if (typeof Notification !== 'undefined' && Notification.success) {
-                        Notification.success('✅ تم تعطيل حساب مدير النظام الافتراضي بعد نجاح المزامنة. يرجى تسجيل الدخول بحسابك من Google Sheets.');
-                    }
-                } catch (e) { /* ignore */ }
-
-                try {
-                    this.logout();
-                } catch (e) { /* ignore */ }
-
-                try {
-                    if (typeof UI !== 'undefined' && typeof UI.showLoginScreen === 'function') {
-                        UI.showLoginScreen();
-                    }
-                } catch (e) { /* ignore */ }
-            }
-
-            return true;
-        } catch (e) {
-            return false;
-        }
+        return false;
     },
 
     /**
@@ -236,27 +172,9 @@ window.Auth = {
         // جميع المستخدمين يجب أن يكونوا من قاعدة البيانات قط
         let user = null; // تم إزالة validUsers لأسباب أمنية
 
-        // البحث ي قاعدة بيانات المستخدمين من Google Sheets
+        // البحث في قاعدة بيانات المستخدمين من Google Sheets (المستخدمون من قاعدة البيانات فقط)
         let foundUser = null;
         let users = AppState.appData.users || [];
-
-        // ✅ Bootstrap: إذا لم يوجد أي مستخدمين بعد، نسمح بحساب bootstrap (مرة واحدة فقط حتى نجاح المزامنة)
-        if (Array.isArray(users) && users.length === 0 && !this.isBootstrapDisabled() && this.isBootstrapEmail(email)) {
-            const bootstrapUser = {
-                id: 'BOOTSTRAP_ADMIN',
-                name: 'مدير النظام (تهيئة أول مرة)',
-                email: this.bootstrap.email,
-                role: 'admin',
-                department: 'إدارة النظام',
-                active: true,
-                password: '***',
-                passwordHash: this.bootstrap.passwordHash,
-                permissions: {},
-                createdAt: new Date().toISOString()
-            };
-            users = [bootstrapUser]; // لا نحفظه في AppState.appData.users (جلسة مؤقتة فقط)
-            foundUser = bootstrapUser;
-        }
 
         // معالجة البيانات إذا كانت تحتوي على JSON strings (من Google Sheets)
         if (users.length > 0) {
@@ -521,7 +439,7 @@ window.Auth = {
                     } else if (canSyncUsers) {
                         msg += '\n\n• تأكد من رابط Google Apps Script في "إعداد المزامنة" (يجب أن ينتهي بـ /exec).';
                         msg += '\n• في Google: نشر التطبيق كـ Web App مع "من له حق الوصول: أي شخص".';
-                        msg += '\n\nللتجربة الأولى يمكنك استخدام: البريد admin@hse.local وكلمة المرور admin123';
+                        msg += '\n• تأكد من وجود مستخدمين في ورقة Users في Google Sheets.';
                         Notification.error(msg);
                     } else {
                         msg += ' يرجى تفعيل Google Apps Script أو إضافة مستخدمين من الإعدادات.';

@@ -276,7 +276,6 @@
 
                 const ok = await window.GoogleIntegration.syncUsers(true);
                 if (ok) {
-                    // تعطيل bootstrap بعد نجاح المزامنة إن لزم
                     try {
                         if (window.Auth && typeof window.Auth.handleUsersSyncSuccess === 'function') {
                             window.Auth.handleUsersSyncSuccess();
@@ -881,7 +880,7 @@ Yasser.diab@icapp.com.eg`;
                     var isDeployed = typeof window !== 'undefined' && window.location && window.location.hostname && 
                         (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('netlify.app'));
                     if (isDeployed && (errorMsg.indexOf('البريد الإلكتروني أو كلمة المرور') !== -1 || errorMsg.indexOf('Google Apps Script') !== -1 || errorMsg.indexOf('لا يوجد مستخدمون') !== -1)) {
-                        errorMsg += '\n\n💡 تأكد من "إعداد المزامنة" (رابط الخادم صحيح). للتجربة الأولى: admin@hse.local / admin123';
+                        errorMsg += '\n\n💡 تأكد من "إعداد المزامنة" (رابط الخادم صحيح) ووجود مستخدمين في ورقة Users.';
                     }
                     var _shortMsg = (result && result.message && typeof result.message === 'string') ? result.message.split('\n')[0] : errorMsg;
                     console.error('❌ فشل تسجيل الدخول:', _shortMsg);
@@ -910,13 +909,13 @@ Yasser.diab@icapp.com.eg`;
                            errorStr.includes('network') ||
                            errorStr.includes('cors') ||
                            errorStr.includes('connection')) {
-                    errorMsg = 'فشل الاتصال بالخادم (Google Apps Script). تأكد من: 1) رابط الخادم صحيح في "إعداد المزامنة" 2) نشر التطبيق كـ Web App مع "من له حق الوصول: أي شخص". للتجربة الأولى: admin@hse.local / admin123';
+                    errorMsg = 'فشل الاتصال بالخادم (Google Apps Script). تأكد من: 1) رابط الخادم صحيح في "إعداد المزامنة" 2) نشر التطبيق كـ Web App مع "من له حق الوصول: أي شخص".';
                 } else if (errorStr.includes('google') && 
                            (errorStr.includes('غير متاح') || 
                             errorStr.includes('not available') ||
                             errorStr.includes('خطأ') ||
                             errorStr.includes('error'))) {
-                    errorMsg = 'خدمات Google غير متاحة حالياً. يرجى المحاولة لاحقاً أو التحقق من إعدادات Google Sheets. للتجربة الأولى: admin@hse.local / admin123';
+                    errorMsg = 'خدمات Google غير متاحة حالياً. يرجى المحاولة لاحقاً أو التحقق من إعدادات Google Sheets.';
                 }
                 if (typeof window !== 'undefined' && window.location && window.location.hostname && 
                     (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('netlify.app'))) {
